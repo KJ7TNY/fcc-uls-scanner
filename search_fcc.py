@@ -22,6 +22,7 @@ from datetime import datetime
 from collections import defaultdict
 
 DB_PATH = os.path.expanduser("~/fcc-scanner/fcc.db")
+REF_DB  = os.path.expanduser("~/fcc-scanner/fcc_reference.db")
 
 # Emission designator decoder
 EMISSION_TYPES = {
@@ -45,12 +46,20 @@ EMISSION_TYPES = {
     "FXD": "Digital Data",
 }
 
-def decode_emission(em):
-    if not em or len(em) < 3:
+def decode_emission(em, con=None):
+    if not em:
         return ""
-    suffix = em[-3:].upper()
-    label = EMISSION_TYPES.get(suffix, "")
-    return f" ({label})" if label else ""
+    # Try full designator lookup in reference db first
+    if con:
+        desc = lookup_emission(con, em)
+        if desc:
+            return f" ({desc})"
+    # Fall back to suffix lookup in hardcoded dict
+    if len(em) >= 3:
+        suffix = em[-3:].upper()
+        label = EMISSION_TYPES.get(suffix, "")
+        return f" ({label})" if label else ""
+    return ""
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -69,7 +78,38 @@ def connect():
         exit(1)
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
+    # Attach reference database if available
+    if os.path.exists(REF_DB):
+        con.execute(f"ATTACH DATABASE '{REF_DB}' AS ref")
     return con
+
+
+def lookup_emission(con, designator):
+    """Look up emission designator description from reference db."""
+    if not designator or not os.path.exists(REF_DB):
+        return None
+    try:
+        r = con.execute(
+            "SELECT description FROM ref.emission_lookup WHERE designator = ?",
+            (designator.strip(),)
+        ).fetchone()
+        return r[0] if r else None
+    except Exception:
+        return None
+
+
+def lookup_station_class(con, code):
+    """Look up station class description from reference db."""
+    if not code or not os.path.exists(REF_DB):
+        return None
+    try:
+        r = con.execute(
+            "SELECT name, description FROM ref.station_class WHERE code = ?",
+            (code.strip(),)
+        ).fetchone()
+        return f"{r[0]} — {r[1]}" if r else None
+    except Exception:
+        return None
 
 
 def get_frequencies(con, unique_system_id, location_number=None):
@@ -153,7 +193,7 @@ def get_frequencies(con, unique_system_id, location_number=None):
     return deduped
 
 
-def format_freq_lines(freq_rows):
+def format_freq_lines(freq_rows, con=None):
     if not freq_rows:
         return ["    (none on file)"]
     lines = []
@@ -165,7 +205,7 @@ def format_freq_lines(freq_rows):
         if not freq:
             continue
         power_str = f"{power:.1f}W" if power else "?W"
-        em_str    = f"{em}{decode_emission(em)}" if em else "N/A"
+        em_str    = f"{em}{decode_emission(em, con)}" if em else "N/A"
         lines.append(f"    {float(freq):>12.5f} MHz | {sclass:<4s} | {power_str:<8s} | {em_str}")
     return lines if lines else ["    (none on file)"]
 
@@ -207,7 +247,7 @@ def print_results(con, rows, title, distances=None):
     for i, r in enumerate(rows):
         dist = distances[i] if distances else None
         freq_rows = get_frequencies(con, r['unique_system_id'], r['location_number'])
-        print_single_result(r, format_freq_lines(freq_rows), distance=dist)
+        print_single_result(r, format_freq_lines(freq_rows, con), distance=dist)
 
 
 def save_results(con, rows, filename, distances=None):
@@ -240,7 +280,7 @@ def save_results(con, rows, filename, distances=None):
             f.write(f"{'─'*62}\n")
             f.write(f"    {'Frequency':>12s} MHz   {'Class':<4s}   {'Power':<8s}   Emission\n")
             f.write(f"{'─'*62}\n")
-            for line in format_freq_lines(freq_rows):
+            for line in format_freq_lines(freq_rows, con):
                 f.write(line + "\n")
             f.write(f"{'─'*62}\n\n")
     print(f"  ✓  Saved to {outpath}")
@@ -938,6 +978,93 @@ def search_repeaters(con):
 
 
 
+
+def search_reference(con):
+    print("\n--- Reference Lookup ---")
+    print("  Look up any emission designator or station class code\n")
+    print("  1 - Emission designator  (e.g. 8K10F1W, 11K2F3E)")
+    print("  2 - Station class code   (e.g. FB2, FX1, MO3)")
+    print("  3 - Browse all station classes")
+    print("  4 - Browse all emission designators")
+
+    choice = input("\n  Enter choice (1-4): ").strip()
+
+    if choice == "1":
+        code = input("  Enter emission designator: ").strip().upper()
+        r = con.execute(
+            "SELECT designator, bandwidth, modulation, info_type, description FROM ref.emission_lookup WHERE designator = ?",
+            (code,)
+        ).fetchone()
+        if r:
+            print(f"\n  {'='*60}")
+            print(f"  Designator : {r[0]}")
+            print(f"  Bandwidth  : {r[1]}")
+            print(f"  Modulation : {r[2]}")
+            print(f"  Info Type  : {r[3]}")
+            print(f"  Description: {r[4]}")
+            print(f"  {'='*60}")
+        else:
+            # Try partial match
+            rows = con.execute(
+                "SELECT designator, description FROM ref.emission_lookup WHERE designator LIKE ? LIMIT 10",
+                (f"%{code}%",)
+            ).fetchall()
+            if rows:
+                print(f"\n  No exact match — similar codes:")
+                for row in rows:
+                    print(f"    {row[0]:<12} — {row[1]}")
+            else:
+                print(f"  ⚠  No match found for {code}")
+                print(f"  Tip: Use the last 3 characters for type — F3E=FM Analog, F1E=Digital Voice, F1D=Digital Data")
+
+    elif choice == "2":
+        code = input("  Enter station class code: ").strip().upper()
+        r = con.execute(
+            "SELECT code, name, description FROM ref.station_class WHERE code = ?",
+            (code,)
+        ).fetchone()
+        if r:
+            print(f"\n  {'='*60}")
+            print(f"  Code       : {r[0]}")
+            print(f"  Name       : {r[1]}")
+            print(f"  Description: {r[2]}")
+            print(f"  {'='*60}")
+        else:
+            rows = con.execute(
+                "SELECT code, name, description FROM ref.station_class WHERE code LIKE ? LIMIT 10",
+                (f"%{code}%",)
+            ).fetchall()
+            if rows:
+                print(f"\n  No exact match — similar codes:")
+                for row in rows:
+                    print(f"    {row[0]:<6} {row[1]:<30} — {row[2]}")
+            else:
+                print(f"  ⚠  No match found for {code}")
+
+    elif choice == "3":
+        print(f"\n  {'─'*70}")
+        print(f"  {'Code':<8} {'Name':<30} Description")
+        print(f"  {'─'*70}")
+        rows = con.execute(
+            "SELECT code, name, description FROM ref.station_class ORDER BY code"
+        ).fetchall()
+        for r in rows:
+            print(f"  {r[0]:<8} {r[1]:<30} {r[2]}")
+        print(f"  {'─'*70}")
+
+    elif choice == "4":
+        print(f"\n  {'─'*70}")
+        print(f"  {'Designator':<14} {'Info Type':<16} Description")
+        print(f"  {'─'*70}")
+        rows = con.execute(
+            "SELECT designator, info_type, description FROM ref.emission_lookup ORDER BY info_type, designator"
+        ).fetchall()
+        for r in rows:
+            print(f"  {r[0]:<14} {r[1]:<16} {r[2]}")
+        print(f"  {'─'*70}")
+    else:
+        print("  ⚠  Invalid choice.")
+
 def search_by_frn(con):
     print("\n--- FRN Search ---")
     print("  FRN ties ALL licenses for one entity together — across all call signs!")
@@ -1005,6 +1132,7 @@ def main():
     total_hd   = con.execute("SELECT COUNT(*) FROM hd").fetchone()[0]
     has_em     = con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='em'").fetchone() is not None
     has_cities = con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='cities'").fetchone() is not None
+    has_ref    = os.path.exists(REF_DB)
 
     print(f"\n{'='*55}")
     print("  FCC ULS Transmitter Search")
@@ -1013,6 +1141,7 @@ def main():
     print(f"  Transmitter sites : {total_lo:,}")
     print(f"  Emission data     : {'✓ loaded' if has_em     else '✗ run add_em.py'}")
     print(f"  City lookup       : {'✓ loaded' if has_cities else '✗ run add_cities.py'}")
+    print(f"  Reference DB      : {'✓ loaded' if has_ref    else '✗ run build_reference.py'}")
     print(f"{'='*55}")
 
     while True:
@@ -1025,23 +1154,25 @@ def main():
         print("  6 - Frequency range / single frequency search")
         print("  7 - Repeater finder")
         print("  8 - FRN search  ← find everything for one entity!")
-        print("  9 - Exit")
+        print("  9 - Reference lookup  ← decode emission & station class!")
+        print(" 10 - Exit")
 
-        choice = input("\n  Enter choice (1-9): ").strip()
+        choice = input("\n  Enter choice (1-10): ").strip()
 
-        if   choice == "1": search_by_county(con)
-        elif choice == "2": search_by_radius(con)
-        elif choice == "3": search_by_callsign(con)
-        elif choice == "4": search_by_name(con)
-        elif choice == "5": search_by_city(con)
-        elif choice == "6": search_by_frequency_range(con)
-        elif choice == "7": search_repeaters(con)
-        elif choice == "8": search_by_frn(con)
-        elif choice == "9":
+        if   choice == "1":  search_by_county(con)
+        elif choice == "2":  search_by_radius(con)
+        elif choice == "3":  search_by_callsign(con)
+        elif choice == "4":  search_by_name(con)
+        elif choice == "5":  search_by_city(con)
+        elif choice == "6":  search_by_frequency_range(con)
+        elif choice == "7":  search_repeaters(con)
+        elif choice == "8":  search_by_frn(con)
+        elif choice == "9":  search_reference(con)
+        elif choice == "10":
             print("\n  Goodbye! Happy scanning! 📻\n")
             break
         else:
-            print("  Please enter 1 through 9")
+            print("  Please enter 1 through 10")
 
     con.close()
 
