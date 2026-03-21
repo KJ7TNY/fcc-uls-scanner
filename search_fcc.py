@@ -1125,6 +1125,119 @@ def search_by_frn(con):
         if save == 'y':
             save_results(con, rows, f"results_frn_{frn}.txt")
 
+
+def search_amateur(con):
+    print("\n--- Amateur Radio Callsign Lookup ---")
+    print("  3,346,184 licensed hams — fully offline!!\n")
+    print("  1 - Look up by call sign")
+    print("  2 - Look up by last name + state")
+    print("  3 - Look up by FRN")
+
+    choice = input("\n  Enter choice (1-3): ").strip()
+
+    if choice == "1":
+        call = input("  Enter call sign (e.g. KJ7TNY): ").strip().upper()
+        rows = con.execute("""
+            SELECT call_sign, full_name, first_name, last_name,
+                   city, state, zip_code, operator_class,
+                   class_code, group_code, grant_date,
+                   expired_date, frn, status
+            FROM amateur
+            WHERE call_sign = ?
+        """, (call,)).fetchall()
+
+        if not rows:
+            print(f"  ⚠  No record found for {call}")
+            return
+
+        for r in rows:
+            _print_ham(r)
+
+    elif choice == "2":
+        last  = input("  Last name (partial ok): ").strip()
+        state = input("  State code (e.g. ID): ").strip().upper()
+        rows = con.execute("""
+            SELECT call_sign, full_name, first_name, last_name,
+                   city, state, zip_code, operator_class,
+                   class_code, group_code, grant_date,
+                   expired_date, frn, status
+            FROM amateur
+            WHERE UPPER(last_name) LIKE UPPER(?)
+              AND state = ?
+            ORDER BY last_name, first_name
+            LIMIT 25
+        """, (f"%{last}%", state)).fetchall()
+
+        if not rows:
+            print(f"  ⚠  No records found for {last} in {state}")
+            return
+
+        print(f"\n  Found {len(rows)} result(s):\n")
+        for r in rows:
+            _print_ham(r)
+
+    elif choice == "3":
+        frn = input("  Enter FRN: ").strip()
+        rows = con.execute("""
+            SELECT call_sign, full_name, first_name, last_name,
+                   city, state, zip_code, operator_class,
+                   class_code, group_code, grant_date,
+                   expired_date, frn, status
+            FROM amateur
+            WHERE frn = ?
+               OR CAST(frn AS INTEGER) = CAST(? AS INTEGER)
+            ORDER BY call_sign
+        """, (frn, frn)).fetchall()
+
+        if not rows:
+            print(f"  ⚠  No records found for FRN {frn}")
+            return
+
+        for r in rows:
+            _print_ham(r)
+    else:
+        print("  ⚠  Invalid choice.")
+
+
+def _print_ham(r):
+    """Print a single ham record nicely."""
+    # Status decoder
+    status_map = {
+        "HA": "Active",
+        "HV": "Active (Vanity)",
+        "HX": "Expired",
+        "HB": "Cancelled",
+        "A":  "Active",
+        "L":  "Active",
+    }
+    status_str = status_map.get(r[13], r[13] or "Unknown")
+    # Class decoder — blank AM record = General
+    class_map = {
+        "A": "Advanced",
+        "B": "Technician Plus",
+        "C": "Amateur Extra",
+        "D": "Technician",
+        "E": "Amateur Extra",
+        "G": "General",
+        "N": "Novice",
+        "T": "Technician",
+        "P": "Technician Plus",
+        "":  "General",
+    }
+    class_str = class_map.get(r[8], r[7] or "Unknown")
+
+    print(f"  {'━'*55}")
+    print(f"  Call Sign : {r[0]}")
+    print(f"  Name      : {r[1] or f'{r[2]} {r[3]}'.strip()}")
+    print(f"  Location  : {r[4]}, {r[5]}  {r[6]}")
+    print(f"  Class     : {class_str}  (Group {r[9]})" if r[9] else f"  Class     : {class_str}")
+    print(f"  Licensed  : {r[10]}")
+    if r[11]:
+        print(f"  Expires   : {r[11]}")
+    print(f"  FRN       : {r[12] or 'N/A'}")
+    print(f"  Status    : {status_str}")
+    print(f"  {'━'*55}")
+
 def main():
     con = connect()
 
@@ -1133,6 +1246,7 @@ def main():
     has_em     = con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='em'").fetchone() is not None
     has_cities = con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='cities'").fetchone() is not None
     has_ref    = os.path.exists(REF_DB)
+    has_amat   = con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='amateur'").fetchone() is not None
 
     print(f"\n{'='*55}")
     print("  FCC ULS Transmitter Search")
@@ -1142,22 +1256,24 @@ def main():
     print(f"  Emission data     : {'✓ loaded' if has_em     else '✗ run add_em.py'}")
     print(f"  City lookup       : {'✓ loaded' if has_cities else '✗ run add_cities.py'}")
     print(f"  Reference DB      : {'✓ loaded' if has_ref    else '✗ run build_reference.py'}")
+    print(f"  Amateur callsigns : {'✓ loaded' if has_amat   else '✗ run import_amateur.py'}")
     print(f"{'='*55}")
 
     while True:
         print("\n  What would you like to search?")
-        print("  1 - State + County")
-        print("  2 - Radius search by coordinates")
-        print("  3 - Call sign lookup")
-        print("  4 - Company / licensee name")
-        print("  5 - Radius search by city name  ← offline!")
-        print("  6 - Frequency range / single frequency search")
-        print("  7 - Repeater finder")
-        print("  8 - FRN search  ← find everything for one entity!")
-        print("  9 - Reference lookup  ← decode emission & station class!")
-        print(" 10 - Exit")
+        print("  1  - State + County")
+        print("  2  - Radius search by coordinates")
+        print("  3  - Call sign lookup  (Part 90)")
+        print("  4  - Company / licensee name")
+        print("  5  - Radius search by city name  ← offline!")
+        print("  6  - Frequency range / single frequency search")
+        print("  7  - Repeater finder")
+        print("  8  - FRN search  ← find everything for one entity!")
+        print("  9  - Reference lookup  ← decode emission & station class!")
+        print("  10 - Amateur callsign lookup  ← 3.3M hams offline!")
+        print("  11 - Exit")
 
-        choice = input("\n  Enter choice (1-10): ").strip()
+        choice = input("\n  Enter choice (1-11): ").strip()
 
         if   choice == "1":  search_by_county(con)
         elif choice == "2":  search_by_radius(con)
@@ -1168,11 +1284,12 @@ def main():
         elif choice == "7":  search_repeaters(con)
         elif choice == "8":  search_by_frn(con)
         elif choice == "9":  search_reference(con)
-        elif choice == "10":
+        elif choice == "10": search_amateur(con)
+        elif choice == "11":
             print("\n  Goodbye! Happy scanning! 📻\n")
             break
         else:
-            print("  Please enter 1 through 10")
+            print("  Please enter 1 through 11")
 
     con.close()
 
