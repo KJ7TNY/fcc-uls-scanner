@@ -173,6 +173,8 @@ def format_freq_lines(freq_rows):
 def print_single_result(r, freq_rows, distance=None):
     print(f"\n  Call Sign : {r['call_sign'] or 'N/A'}")
     print(f"  Licensee  : {r['entity_name'] or 'N/A'}")
+    if r['frn']:
+        print(f"  FRN       : {r['frn']}")
     city = r['location_city'] or ''
     state = r['location_state'] or ''
     if city or state:
@@ -223,6 +225,8 @@ def save_results(con, rows, filename, distances=None):
             freq_rows = get_frequencies(con, r['unique_system_id'], r['location_number'])
             f.write(f"Call Sign : {r['call_sign'] or 'N/A'}\n")
             f.write(f"Licensee  : {r['entity_name'] or 'N/A'}\n")
+            if r['frn']:
+                f.write(f"FRN       : {r['frn']}\n")
             city = r['location_city'] or ''
             state = r['location_state'] or ''
             if city or state:
@@ -259,6 +263,17 @@ def base_query():
                  WHERE en.unique_system_id = lo.unique_system_id
                  LIMIT 1)
             ) AS entity_name,
+            COALESCE(
+                (SELECT frn FROM en
+                 WHERE en.unique_system_id = lo.unique_system_id
+                   AND en.entity_type = 'L'
+                   AND en.frn IS NOT NULL AND en.frn != ''
+                 LIMIT 1),
+                (SELECT frn FROM en
+                 WHERE en.unique_system_id = lo.unique_system_id
+                   AND en.frn IS NOT NULL AND en.frn != ''
+                 LIMIT 1)
+            ) AS frn,
             lo.location_city,
             lo.location_state,
             lo.location_county,
@@ -786,15 +801,15 @@ def search_repeaters(con):
             off_str = f"+{off:.4f}" if off > 0 else f"{off:.4f}"
             abs_off = abs(off)
             if abs(abs_off - 5.0) < 0.01:
-                off_str += " ★ Standard UHF MHz"
+                off_str += " ★ Standard UHF"
             elif abs(abs_off - 9.0) < 0.01:
-                off_str += " ★ Gov UHF MHz"
+                off_str += " ★ Gov UHF"
             elif abs(abs_off - 45.0) < 0.5:
                 off_str += " ★ 800 MHz"
             elif abs(abs_off - 30.0) < 0.5:
                 off_str += " ★ 700 MHz"
             elif abs(abs_off - 0.6) < 0.02:
-                off_str += " ★ Ham VHF MHz"
+                off_str += " ★ Ham VHF"
             return off_str
 
         # Smart offset display — if all offsets are the same show once
@@ -802,9 +817,9 @@ def search_repeaters(con):
         if len(unique_offsets) == 1:
             count = len(raw_offsets)
             count_str = f"  (same across all {count} pairs)" if count > 1 else ""
-            offsets = [label_offset(raw_offsets[0]) + count_str]
+            offsets = [label_offset(raw_offsets[0]) + count_str + " MHz"]
         else:
-            offsets = [label_offset(o) for o in raw_offsets]
+            offsets = [label_offset(o) + " MHz" for o in raw_offsets]
 
         # Get best location
         loc = con.execute("""
@@ -902,8 +917,8 @@ def search_repeaters(con):
         output_lines.append(f"{'─'*62}\n")
         output_lines.append(f"OFFSET(S):\n")
         for off in r['offsets']:
-            print(f"    {off}")
-            output_lines.append(f"  {off}" + (" MHz\n" if " MHz" not in off else "\n"))
+            print(f"    {off} MHz")
+            output_lines.append(f"  {off} MHz\n")
 
         output_lines.append("\n")
 
@@ -921,6 +936,67 @@ def search_repeaters(con):
                 f.writelines(output_lines)
             print(f"  ✓  Saved to {outpath}")
 
+
+
+def search_by_frn(con):
+    print("\n--- FRN Search ---")
+    print("  FRN ties ALL licenses for one entity together — across all call signs!")
+    print("  Find the FRN in any search result, then use it here.\n")
+
+    frn = input("  Enter FRN (e.g. 0006610380): ").strip()
+
+    # First show a summary of all call signs under this FRN
+    callsigns = con.execute("""
+        SELECT DISTINCT hd.call_sign
+        FROM hd
+        WHERE hd.unique_system_id IN (
+            SELECT unique_system_id FROM en
+            WHERE frn = ?
+               OR CAST(frn AS INTEGER) = CAST(? AS INTEGER)
+        )
+        AND hd.call_sign IS NOT NULL AND hd.call_sign != ''
+        ORDER BY hd.call_sign
+    """, (frn, frn)).fetchall()
+
+    # Get entity name
+    entity = con.execute("""
+        SELECT DISTINCT entity_name FROM en
+        WHERE (frn = ? OR CAST(frn AS INTEGER) = CAST(? AS INTEGER))
+          AND entity_type = 'L'
+          AND entity_name IS NOT NULL
+        LIMIT 1
+    """, (frn, frn)).fetchone()
+
+    entity_name = entity[0] if entity else "Unknown"
+    cs_list = [r[0] for r in callsigns if r[0]]
+
+    print(f"\n{'='*70}")
+    print(f"  FRN: {frn}")
+    print(f"  Entity: {entity_name}")
+    if cs_list:
+        print(f"  Call Signs ({len(cs_list)}): {'  '.join(cs_list)}")
+    print(f"{'='*70}")
+
+    # Get all transmitter sites — include ones without coords too
+    rows = con.execute(
+        base_query() + """
+        WHERE lo.unique_system_id IN (
+            SELECT unique_system_id FROM en
+            WHERE frn = ?
+               OR CAST(frn AS INTEGER) = CAST(? AS INTEGER)
+        )
+        GROUP BY lo.unique_system_id, lo.location_number
+        ORDER BY lo.location_state, lo.location_city
+        """,
+        (frn, frn)
+    ).fetchall()
+
+    print_results(con, rows, f"All transmitter sites for FRN {frn} — {entity_name}")
+
+    if rows:
+        save = input("\n  Save to file? (y/n): ").strip().lower()
+        if save == 'y':
+            save_results(con, rows, f"results_frn_{frn}.txt")
 
 def main():
     con = connect()
@@ -946,11 +1022,12 @@ def main():
         print("  3 - Call sign lookup")
         print("  4 - Company / licensee name")
         print("  5 - Radius search by city name  ← offline!")
-        print("  6 - Frequency range search      ← find who's on a band!")
-        print("  7 - Repeater & base station finder ← NEW!!")
-        print("  8 - Exit")
+        print("  6 - Frequency range / single frequency search")
+        print("  7 - Repeater finder")
+        print("  8 - FRN search  ← find everything for one entity!")
+        print("  9 - Exit")
 
-        choice = input("\n  Enter choice (1-8): ").strip()
+        choice = input("\n  Enter choice (1-9): ").strip()
 
         if   choice == "1": search_by_county(con)
         elif choice == "2": search_by_radius(con)
@@ -959,11 +1036,12 @@ def main():
         elif choice == "5": search_by_city(con)
         elif choice == "6": search_by_frequency_range(con)
         elif choice == "7": search_repeaters(con)
-        elif choice == "8":
+        elif choice == "8": search_by_frn(con)
+        elif choice == "9":
             print("\n  Goodbye! Happy scanning! 📻\n")
             break
         else:
-            print("  Please enter 1 through 7")
+            print("  Please enter 1 through 9")
 
     con.close()
 
