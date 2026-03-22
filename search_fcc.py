@@ -543,17 +543,7 @@ def search_by_frequency_range(con):
 
     try:
         freq_low  = float(input("  Low frequency  (MHz, e.g. 150): ").strip())
-        high_raw  = input("  High frequency (MHz, or ENTER for single freq): ").strip()
-        if high_raw == "":
-            freq_high = freq_low + 0.005
-            freq_low  = freq_low - 0.005
-            print(f"  → Single frequency search: {freq_low + 0.005:.5f} MHz")
-        else:
-            freq_high = float(high_raw)
-            if freq_high <= freq_low:
-                freq_high = freq_low + 0.005
-                freq_low  = freq_low - 0.005
-                print(f"  → Single frequency search: {freq_low + 0.005:.5f} MHz")
+        freq_high = float(input("  High frequency (MHz, e.g. 174): ").strip())
     except ValueError:
         print("  ⚠  Invalid frequency.")
         return
@@ -1136,6 +1126,67 @@ def search_by_frn(con):
             save_results(con, rows, f"results_frn_{frn}.txt")
 
 
+def search_by_frn(con):
+    print("\n--- FRN Search ---")
+    print("  FRN ties ALL licenses for one entity together — across all call signs!")
+    print("  Find the FRN in any search result, then use it here.\n")
+
+    frn = input("  Enter FRN (e.g. 0006610380): ").strip()
+
+    # First show a summary of all call signs under this FRN
+    callsigns = con.execute("""
+        SELECT DISTINCT hd.call_sign
+        FROM hd
+        WHERE hd.unique_system_id IN (
+            SELECT unique_system_id FROM en
+            WHERE frn = ?
+               OR CAST(frn AS INTEGER) = CAST(? AS INTEGER)
+        )
+        AND hd.call_sign IS NOT NULL AND hd.call_sign != ''
+        ORDER BY hd.call_sign
+    """, (frn, frn)).fetchall()
+
+    # Get entity name
+    entity = con.execute("""
+        SELECT DISTINCT entity_name FROM en
+        WHERE (frn = ? OR CAST(frn AS INTEGER) = CAST(? AS INTEGER))
+          AND entity_type = 'L'
+          AND entity_name IS NOT NULL
+        LIMIT 1
+    """, (frn, frn)).fetchone()
+
+    entity_name = entity[0] if entity else "Unknown"
+    cs_list = [r[0] for r in callsigns if r[0]]
+
+    print(f"\n{'='*70}")
+    print(f"  FRN: {frn}")
+    print(f"  Entity: {entity_name}")
+    if cs_list:
+        print(f"  Call Signs ({len(cs_list)}): {'  '.join(cs_list)}")
+    print(f"{'='*70}")
+
+    # Get all transmitter sites — include ones without coords too
+    rows = con.execute(
+        base_query() + """
+        WHERE lo.unique_system_id IN (
+            SELECT unique_system_id FROM en
+            WHERE frn = ?
+               OR CAST(frn AS INTEGER) = CAST(? AS INTEGER)
+        )
+        GROUP BY lo.unique_system_id, lo.location_number
+        ORDER BY lo.location_state, lo.location_city
+        """,
+        (frn, frn)
+    ).fetchall()
+
+    print_results(con, rows, f"All transmitter sites for FRN {frn} — {entity_name}")
+
+    if rows:
+        save = input("\n  Save to file? (y/n): ").strip().lower()
+        if save == 'y':
+            save_results(con, rows, f"results_frn_{frn}.txt")
+
+
 def search_amateur(con):
     print("\n--- Amateur Radio Callsign Lookup ---")
     print("  3,346,184 licensed hams — fully offline!!\n")
@@ -1256,7 +1307,7 @@ def main():
     has_em     = con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='em'").fetchone() is not None
     has_cities = con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='cities'").fetchone() is not None
     has_ref    = os.path.exists(REF_DB)
-    has_amat   = con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='amateur'").fetchone() is not None
+
 
     print(f"\n{'='*55}")
     print("  FCC ULS Transmitter Search")
@@ -1266,7 +1317,7 @@ def main():
     print(f"  Emission data     : {'✓ loaded' if has_em     else '✗ run add_em.py'}")
     print(f"  City lookup       : {'✓ loaded' if has_cities else '✗ run add_cities.py'}")
     print(f"  Reference DB      : {'✓ loaded' if has_ref    else '✗ run build_reference.py'}")
-    print(f"  Amateur callsigns : {'✓ loaded' if has_amat   else '✗ run import_amateur.py'}")
+
     print(f"{'='*55}")
 
     while True:
@@ -1280,10 +1331,9 @@ def main():
         print("  7  - Repeater finder")
         print("  8  - FRN search  ← find everything for one entity!")
         print("  9  - Reference lookup  ← decode emission & station class!")
-        print("  10 - Amateur callsign lookup  ← 3.3M hams offline!")
-        print("  11 - Exit")
+        print("  10 - Exit")
 
-        choice = input("\n  Enter choice (1-11): ").strip()
+        choice = input("\n  Enter choice (1-10): ").strip()
 
         if   choice == "1":  search_by_county(con)
         elif choice == "2":  search_by_radius(con)
@@ -1294,12 +1344,11 @@ def main():
         elif choice == "7":  search_repeaters(con)
         elif choice == "8":  search_by_frn(con)
         elif choice == "9":  search_reference(con)
-        elif choice == "10": search_amateur(con)
-        elif choice == "11":
+        elif choice == "10":
             print("\n  Goodbye! Happy scanning! 📻\n")
             break
         else:
-            print("  Please enter 1 through 11")
+            print("  Please enter 1 through 10")
 
     con.close()
 
