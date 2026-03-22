@@ -15,6 +15,30 @@ This tool finds the TRANSMITTER — the actual antenna — wherever it physicall
 
 ---
 
+## The Tool Ecosystem — "The Jailhouse"
+
+```
+fcc.db  ←  THE JAILHOUSE  (holds all the data prisoners)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  hd, en, lo, fr, em   ← Part 90 Land Mobile data
+  cities               ← 31,257 US city coordinates
+  amateur              ← 3.3M ham radio callsigns
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+fcc_reference.db  ←  PERMANENT REFERENCE (never rebuilt)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  emission_lookup      ← decode any emission designator
+  station_class        ← decode any station class code
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TOOLS THAT ACCESS THE JAILHOUSE:
+  search_fcc.py  ← Part 90 scanner radio search tool
+  hamcall.py     ← Amateur radio callsign GUI lookup
+  (more tools coming as the project grows!!)
+```
+
+---
+
 ## What's In This Folder
 
 ```
@@ -25,7 +49,8 @@ This tool finds the TRANSMITTER — the actual antenna — wherever it physicall
 ├── add_cities.py       ← Step 4: Add offline city coordinates (run once)
 ├── build_reference.py  ← Step 5: Build permanent reference database (run once)
 ├── import_amateur.py   ← Step 6: Import amateur radio callsign database
-├── search_fcc.py       ← THE MAIN TOOL — run this to search!
+├── search_fcc.py       ← Part 90 search tool (terminal)
+├── hamcall.py          ← Ham callsign lookup (GUI desktop app!!)
 ├── uscities.csv        ← US cities database (31,257 cities with GPS coords)
 ├── fcc.db              ← Main SQLite database (2.4GB+ — rebuilt from data files)
 ├── fcc_reference.db    ← Permanent reference database (tiny, never rebuilt)
@@ -54,7 +79,6 @@ This tool finds the TRANSMITTER — the actual antenna — wherever it physicall
 https://data.fcc.gov/download/pub/uls/complete/a_LMpriv.zip
 ```
 
-Unzip it into your data folder:
 ```bash
 unzip ~/Downloads/a_LMpriv.zip -d ~/fcc-scanner/data/
 ```
@@ -62,7 +86,7 @@ unzip ~/Downloads/a_LMpriv.zip -d ~/fcc-scanner/data/
 ### Step 2 — Download the Cities Database (one time only)
 
 Go to: `https://simplemaps.com/data/us-cities`
-Download the free version — it will be a zip containing `uscities.csv`
+Download the free version — zip contains `uscities.csv`
 Put `uscities.csv` in `~/fcc-scanner/`
 
 ### Step 3 — Download the Amateur Radio Database
@@ -71,12 +95,17 @@ Put `uscities.csv` in `~/fcc-scanner/`
 https://data.fcc.gov/download/pub/uls/complete/a_amat.zip
 ```
 
-Unzip it into your amateur folder:
 ```bash
 unzip ~/Downloads/a_amat.zip -d ~/fcc-scanner/amateur/
 ```
 
-### Step 4 — Build All the Databases
+### Step 4 — Install tkinter (one time only — needed for HamCall GUI)
+
+```bash
+sudo apt install python3-tk
+```
+
+### Step 5 — Build All the Databases
 
 Run these scripts IN ORDER:
 
@@ -98,24 +127,25 @@ python3 import_amateur.py
 - `build_reference.py` — builds permanent emission/station class reference (run ONCE, never again)
 - `import_amateur.py` — loads 3.3 million ham callsigns (~5 min, update anytime)
 
-When done you should see:
+When done search_fcc.py should show:
 ```
 Active licenses   : 2,827,785
 Transmitter sites : 1,347,539
 Emission data     : ✓ loaded
 City lookup       : ✓ loaded
 Reference DB      : ✓ loaded
-Amateur callsigns : ✓ loaded
 ```
 
 ---
 
-## Running the Search Tool
+## Tool 1 — search_fcc.py (Part 90 Scanner Search)
 
 ```bash
 cd ~/fcc-scanner
 python3 search_fcc.py
 ```
+
+**Focused entirely on Part 90 Land Mobile — scanner radio research!!**
 
 ### Search Options
 
@@ -154,7 +184,7 @@ python3 search_fcc.py
      Can search by city, coordinates, or county
 
 7  - Repeater finder
-     Finds licenses that have BOTH FB2 (output) and FX1 (input)
+     Finds licenses with BOTH FB2 (output) and FX1 (input)
      Groups all outputs and inputs per license
      Shows offset between input and output frequencies
      Labels standard offsets: ★ Standard UHF (5 MHz), ★ Gov UHF (9 MHz),
@@ -173,17 +203,69 @@ python3 search_fcc.py
      Browse ALL emission designators or station classes
      Fully offline — built once, never needs updating
 
-10 - Amateur callsign lookup  ← 3.3M hams offline!
-     Look up by call sign, last name + state, or FRN
-     Shows name, location, license class, expiration, status
-     Update anytime by re-downloading a_amat.zip
-
-11 - Exit
+10 - Exit
 ```
 
 ---
 
-### Understanding the Results
+## Tool 2 — hamcall.py (Amateur Radio Callsign GUI)
+
+```bash
+cd ~/fcc-scanner
+python3 hamcall.py
+```
+
+**A desktop GUI app for quick ham callsign lookups — completely offline!!**
+
+- Dark terminal aesthetic — green on black radio feel
+- Type any callsign, press ENTER — instant results
+- Shows name, location, license class, expiration, FRN, status
+- 3,346,184 licensed hams in the database
+- Active = green, expired/not found = red
+
+**Future phases planned:**
+- DX contact logging
+- Personal notes on any callsign
+- QSO history and profiles
+- ADIF export for ham logging software
+
+### Desktop Shortcut for HamCall
+
+```bash
+cat > ~/Desktop/HamCall.desktop << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=HamCall
+Comment=Amateur Radio Callsign Lookup
+Exec=python3 /home/minty/fcc-scanner/hamcall.py
+Icon=network-wireless
+Terminal=false
+Categories=HamRadio;
+EOF
+chmod +x ~/Desktop/HamCall.desktop
+```
+
+### Desktop Shortcut for FCC Scanner
+
+```bash
+cat > ~/Desktop/FCC-Scanner.desktop << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=FCC Scanner
+Comment=FCC ULS Transmitter Search
+Exec=bash -c "cd /home/minty/fcc-scanner && python3 search_fcc.py"
+Icon=network-wired
+Terminal=true
+Categories=HamRadio;
+EOF
+chmod +x ~/Desktop/FCC-Scanner.desktop
+```
+
+---
+
+### Understanding search_fcc.py Results
 
 **Frequency columns:**
 ```
@@ -230,13 +312,6 @@ licenses for that entity across every call sign they hold!!
 - `★ Ham VHF` = 0.6 MHz
 - VHF High (150-174 MHz) = anything goes, no standard offset!
 - Cross-band links show 200+ MHz offset (UHF input → VHF output)
-
-**Amateur License Classes:**
-- `Amateur Extra` = highest class (code C in FCC data)
-- `Advanced` = old upgrade class (code A)
-- `General` = HF privileges (code G or blank in FCC data)
-- `Technician` = VHF/UHF entry class (code D in FCC data)
-- `Technician Plus` = old class with some HF (code B)
 
 ---
 
@@ -303,7 +378,6 @@ Run the same search after a database update to see what changed!!
 
 ## Backing Up This Project
 
-**Back up these files:**
 ```bash
 cp ~/fcc-scanner/*.py ~/your-backup-location/
 cp ~/fcc-scanner/uscities.csv ~/your-backup-location/
@@ -327,8 +401,8 @@ cp ~/fcc-scanner/fcc_reference.db ~/your-backup-location/
 **"Reference DB: ✗"**
 → Run build_reference.py
 
-**"Amateur callsigns: ✗"**
-→ Run import_amateur.py (after downloading a_amat.zip)
+**HamCall won't start — ModuleNotFoundError tkinter**
+→ Run: `sudo apt install python3-tk`
 
 **"City not found"**
 → Try a nearby larger city, or use option 2 (coordinates)
@@ -338,7 +412,7 @@ cp ~/fcc-scanner/fcc_reference.db ~/your-backup-location/
 → Use option 3 (call sign) or option 8 (FRN) to find it directly
 → This is an FCC data gap, not a bug in this tool
 
-**Ham callsign shows wrong license class**
+**HamCall shows wrong license class**
 → Re-download a_amat.zip and run import_amateur.py
 → Blank AM.dat record = General class
 
@@ -372,8 +446,11 @@ cp ~/fcc-scanner/fcc_reference.db ~/your-backup-location/
   secondary input — probably receiving on a different band
 
 - **Missing GPS locations:** Some FCC licenses have transmitters visible
-  on the website but no coordinates in the download — FCC data gap,
+  on the FCC website but no coordinates in the download — FCC data gap,
   use call sign or FRN search to find them
+
+- **Two tools, one jailhouse:** search_fcc.py for deep Part 90 research,
+  hamcall.py for quick ham ID — both read the same fcc.db database!!
 
 ---
 
