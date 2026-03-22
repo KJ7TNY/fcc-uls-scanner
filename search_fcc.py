@@ -543,7 +543,17 @@ def search_by_frequency_range(con):
 
     try:
         freq_low  = float(input("  Low frequency  (MHz, e.g. 150): ").strip())
-        freq_high = float(input("  High frequency (MHz, e.g. 174): ").strip())
+        high_raw  = input("  High frequency (MHz, or ENTER for single freq): ").strip()
+        if high_raw == "":
+            freq_high = freq_low + 0.005
+            freq_low  = freq_low - 0.005
+            print(f"  → Single frequency search: {freq_low + 0.005:.5f} MHz")
+        else:
+            freq_high = float(high_raw)
+            if freq_high <= freq_low:
+                freq_high = freq_low + 0.005
+                freq_low  = freq_low - 0.005
+                print(f"  → Single frequency search: {freq_low + 0.005:.5f} MHz")
     except ValueError:
         print("  ⚠  Invalid frequency.")
         return
