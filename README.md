@@ -230,6 +230,7 @@ python3 hamcall.py
 - Type any callsign, press ENTER — instant results
 - Shows name, location, license class, expiration, FRN, status
 - 3,346,184 licensed hams in the database
+- 578,933 GMRS licenses in the database
 - Active = green, expired/not found = red
 
 **Future phases planned:**
