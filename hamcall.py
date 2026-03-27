@@ -29,13 +29,15 @@ BG_DARK    = "#0a0e0a"   # near black with green tint
 BG_PANEL   = "#0f1a0f"   # slightly lighter panel
 BG_INPUT   = "#141f14"   # input field background
 FG_GREEN   = "#00ff41"   # bright matrix green
-FG_DIM     = "#4a9e4a"   # dimmed green - was #2a6e2a
-FG_AMBER   = "#ffd700"   # amber accent for labels - was #ffb000
-FG_WHITE   = "#e8f5e8"   # soft white-green for values - was #c8e6c8
-FG_RED     = "#ff6666"   # error / expired - was #ff4444
+FG_DIM     = "#4a9e4a"   # dimmed green
+FG_AMBER   = "#ffd700"   # amber accent for labels
+FG_WHITE   = "#e8f5e8"   # soft white-green for values
+FG_RED     = "#ff6666"   # error / expired
 FG_ACTIVE  = "#00ff41"   # active status
-BORDER     = "#2a6d2a"   # subtle border - was #1a4d1a
-HIGHLIGHT  = "#004400"   # highlight color - was #003300
+FG_EXPIRED = "#ffb000"   # amber for expired
+FG_CANCEL  = "#ff6666"   # red for cancelled
+BORDER     = "#2a6d2a"   # subtle border
+HIGHLIGHT  = "#004400"   # highlight color
 
 # ── License class decoder ──────────────────────────────────────
 CLASS_MAP = {
@@ -54,10 +56,18 @@ CLASS_MAP = {
 STATUS_MAP = {
     "HA": ("Active", FG_ACTIVE),
     "HV": ("Active — Vanity", FG_ACTIVE),
-    "HX": ("Expired", FG_RED),
-    "HB": ("Cancelled", FG_RED),
+    "HX": ("Expired", FG_EXPIRED),
+    "HB": ("Cancelled", FG_CANCEL),
     "A":  ("Active", FG_ACTIVE),
     "L":  ("Active", FG_ACTIVE),
+}
+
+GMRS_STATUS_MAP = {
+    "A": ("Active",      FG_ACTIVE),
+    "E": ("Expired",     FG_EXPIRED),
+    "C": ("Cancelled",   FG_CANCEL),
+    "T": ("Terminated",  FG_CANCEL),
+    "":  ("Unknown",     FG_DIM),
 }
 
 
@@ -83,6 +93,23 @@ def lookup_callsign(callsign):
         return None, str(e)
 
 
+def lookup_gmrs(callsign):
+    """Query fcc.db for a GMRS callsign."""
+    if not os.path.exists(DB_PATH):
+        return None, "Database not found!"
+
+    try:
+        con = sqlite3.connect(DB_PATH)
+        con.row_factory = sqlite3.Row
+        row = con.execute("""
+            SELECT * FROM gmrs WHERE call_sign = ?
+        """, (callsign.upper().strip(),)).fetchone()
+        con.close()
+        return row, None
+    except Exception as e:
+        return None, str(e)
+
+
 class HamCallApp:
     def __init__(self, root):
         self.root = root
@@ -91,7 +118,7 @@ class HamCallApp:
         self.root.resizable(False, False)
 
         # Center on screen
-        w, h = 480, 520
+        w, h = 550, 560
         sw = root.winfo_screenwidth()
         sh = root.winfo_screenheight()
         x = (sw - w) // 2
@@ -115,11 +142,11 @@ class HamCallApp:
         hdr = tk.Frame(self.root, bg=BG_DARK, pady=10)
         hdr.pack(fill="x", padx=20)
 
-        tk.Label(hdr, text="📻  HamCall",
+        tk.Label(hdr, text="📻  HamCall   v2.01",
                  font=self.font_title, bg=BG_DARK,
                  fg=FG_GREEN).pack(side="left")
 
-        tk.Label(hdr, text="v1.0  |  KJ7TNY & The Wizard 🧙",
+        tk.Label(hdr, text="KJ7TNY & The Wizard 🧙",
                  font=self.font_sub, bg=BG_DARK,
                  fg=FG_DIM).pack(side="right", pady=6)
 
@@ -194,6 +221,42 @@ class HamCallApp:
         )
         clr.pack(side="left", padx=(6, 0))
 
+        # Service selector
+        svc_row = tk.Frame(search_frame, bg=BG_DARK)
+        svc_row.pack(anchor="w", pady=(4,0))
+
+        tk.Label(svc_row, text="SERVICE:",
+                 font=self.font_label, bg=BG_DARK,
+                 fg=FG_AMBER).pack(side="left", padx=(0,8))
+
+        self.service_var = tk.StringVar(value="amateur")
+
+        rb_ham = tk.Radiobutton(
+            svc_row, text="Amateur",
+            variable=self.service_var, value="amateur",
+            font=self.font_label,
+            bg=BG_DARK, fg=FG_GREEN,
+            selectcolor=BG_DARK,
+            activebackground=BG_DARK,
+            activeforeground=FG_GREEN,
+            cursor="hand2",
+            command=self._service_changed
+        )
+        rb_ham.pack(side="left", padx=(0,16))
+
+        rb_gmrs = tk.Radiobutton(
+            svc_row, text="GMRS",
+            variable=self.service_var, value="gmrs",
+            font=self.font_label,
+            bg=BG_DARK, fg=FG_GREEN,
+            selectcolor=BG_DARK,
+            activebackground=BG_DARK,
+            activeforeground=FG_GREEN,
+            cursor="hand2",
+            command=self._service_changed
+        )
+        rb_gmrs.pack(side="left")
+
         # Hint
         self.hint = tk.Label(search_frame, text="Press ENTER or click LOOK UP",
                              font=self.font_sub, bg=BG_DARK, fg=FG_DIM)
@@ -232,6 +295,7 @@ class HamCallApp:
             ("EXPIRES",  "expires"),
             ("FRN",      "frn"),
             ("STATUS",   "status"),
+            ("NOTE",     "note"),
         ]
 
         for label, key in field_defs:
@@ -261,7 +325,7 @@ class HamCallApp:
 
         self.status_bar = tk.Label(
             footer,
-            text="Ready  —  3,346,184 hams loaded  —  fully offline",
+            text="Ready  —  Amateur: 3.3M  |  GMRS: 578K  —  fully offline",
             font=self.font_sub,
             bg=BG_DARK, fg=FG_DIM
         )
@@ -270,6 +334,19 @@ class HamCallApp:
         tk.Label(footer, text="fcc.db",
                  font=self.font_sub,
                  bg=BG_DARK, fg=FG_DIM).pack(side="right")
+
+    def _service_changed(self):
+        """Called when service radio button changes."""
+        svc = self.service_var.get()
+        if svc == "gmrs":
+            self.hint.config(
+                text="GMRS — one license covers the whole family!!",
+                fg=FG_AMBER)
+        else:
+            self.hint.config(
+                text="Press ENTER or click LOOK UP",
+                fg=FG_DIM)
+        self._clear()
 
     def _auto_upper(self, event=None):
         """Auto-uppercase the callsign entry."""
@@ -282,7 +359,13 @@ class HamCallApp:
         self.lbl_callsign.config(text="- - - - -", fg=FG_DIM)
         for key, lbl in self.fields.items():
             lbl.config(text="—", fg=FG_DIM)
-        self.status_bar.config(text="Ready  —  3,346,184 hams loaded  —  fully offline")
+        svc = self.service_var.get() if hasattr(self, "service_var") else "amateur"
+        if svc == "gmrs":
+            self.status_bar.config(
+                text="Ready  —  578,933 GMRS licenses  —  fully offline")
+        else:
+            self.status_bar.config(
+                text="Ready  —  Amateur: 3.3M  |  GMRS: 578K  —  fully offline")
         self.entry.focus_set()
 
     def _do_lookup(self):
@@ -293,6 +376,12 @@ class HamCallApp:
 
         self.status_bar.config(text=f"Looking up {callsign}...", fg=FG_DIM)
         self.root.update()
+
+        # Route to correct lookup based on service selector
+        svc = self.service_var.get()
+        if svc == "gmrs":
+            self._do_gmrs_lookup(callsign)
+            return
 
         row, error = lookup_callsign(callsign)
 
@@ -356,6 +445,54 @@ class HamCallApp:
             text=f"✓  Found: {row['call_sign']}  —  {name}",
             fg=FG_GREEN
         )
+
+    def _do_gmrs_lookup(self, callsign):
+        """Look up GMRS callsign and populate fields."""
+        row, error = lookup_gmrs(callsign)
+        if error:
+            self.lbl_callsign.config(text="ERROR", fg=FG_RED)
+            self.status_bar.config(text=f"⚠  {error}", fg=FG_RED)
+            return
+        if not row:
+            self.lbl_callsign.config(text=callsign, fg=FG_RED)
+            for key, lbl in self.fields.items():
+                lbl.config(text="—", fg=FG_DIM)
+            self.status_bar.config(
+                text=f"⚠  {callsign} not found — check format (e.g. WRJV291)",
+                fg=FG_AMBER)
+            return
+
+        status_code = row["status"] or ""
+        status_text, status_color = GMRS_STATUS_MAP.get(
+            status_code, (status_code or "Unknown", FG_DIM))
+
+        cs_color = FG_GREEN if status_code == "A" else FG_EXPIRED if status_code == "E" else FG_CANCEL
+        self.lbl_callsign.config(text=row["call_sign"], fg=cs_color)
+
+        name = row["full_name"] or f"{row['first_name']} {row['last_name']}".strip()
+        self.fields["name"].config(text=name or "—", fg=FG_WHITE)
+
+        city    = row["city"] or ""
+        state   = row["state"] or ""
+        zipcode = row["zip_code"] or ""
+        location = f"{city}, {state}  {zipcode}".strip(", ")
+        self.fields["location"].config(text=location or "—", fg=FG_WHITE)
+
+        self.fields["cls"].config(
+            text="GMRS Family License  462/467 MHz", fg=FG_AMBER)
+
+        self.fields["expires"].config(
+            text=row["expired_date"] or "—", fg=FG_WHITE)
+        self.fields["frn"].config(
+            text=row["frn"] or "—", fg=FG_WHITE)
+        self.fields["status"].config(
+            text=status_text, fg=status_color)
+        self.fields["note"].config(
+            text="Covers entire family — no test required", fg=FG_DIM)
+
+        self.status_bar.config(
+            text=f"✓  Found: {row['call_sign']}  —  {name}  —  GMRS",
+            fg=FG_GREEN if status_code == "A" else FG_EXPIRED)
 
 
 def main():
