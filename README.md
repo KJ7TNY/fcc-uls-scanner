@@ -23,6 +23,7 @@ fcc.db  ←  THE JAILHOUSE  (holds all the data prisoners)
   hd, en, lo, fr, em   ← Part 90 Land Mobile data
   cities               ← 31,257 US city coordinates
   amateur              ← 3.3M ham radio callsigns
+  gmrs                 ← 578k gmrs radio callsigns
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 fcc_reference.db  ←  PERMANENT REFERENCE (never rebuilt)
@@ -33,7 +34,7 @@ fcc_reference.db  ←  PERMANENT REFERENCE (never rebuilt)
 
 TOOLS THAT ACCESS THE JAILHOUSE:
   search_fcc.py  ← Part 90 scanner radio search tool
-  hamcall.py     ← Amateur radio callsign GUI lookup
+  hamcall.py     ← Amateur / gmrs callsign GUI lookup
   (more tools coming as the project grows!!)
 ```
 
@@ -126,6 +127,7 @@ python3 import_amateur.py
 - `add_cities.py` — loads 31,257 US cities with GPS coordinates (run ONCE, never again)
 - `build_reference.py` — builds permanent emission/station class reference (run ONCE, never again)
 - `import_amateur.py` — loads 3.3 million ham callsigns (~5 min, update anytime)
+- `import_gmrs.py` — loads 578k gmrs callsigns (~3 min, update anytime)
 
 When done search_fcc.py should show:
 ```
@@ -208,7 +210,7 @@ python3 search_fcc.py
 
 ---
 
-## Tool 2 — hamcall.py (Amateur Radio Callsign GUI)
+## Tool 2 — hamcall.py (Amateur & GMRS Callsign GUI)
 
 ```bash
 cd ~/fcc-scanner
@@ -237,7 +239,7 @@ cat > ~/Desktop/HamCall.desktop << 'EOF'
 Version=1.0
 Type=Application
 Name=HamCall
-Comment=Amateur Radio Callsign Lookup
+Comment=Amateur & GMRS Callsign Lookup
 Exec=python3 /home/minty/fcc-scanner/hamcall.py
 Icon=network-wireless
 Terminal=false
@@ -337,6 +339,15 @@ cd ~/fcc-scanner
 python3 import_amateur.py
 ```
 
+### Update GMRS Radio Callsigns (update whenever you want)
+
+```bash
+# Download: https://data.fcc.gov/download/pub/uls/complete/l_gmrs.zip
+unzip -o ~/Downloads/l_gmrs.zip -d ~/fcc-scanner/gmrs/
+cd ~/fcc-scanner
+python3 import_gmrs.py
+```
+
 ### Never Need to Update
 - `add_cities.py` / `uscities.csv` — city coordinates don't change
 - `build_reference.py` / `fcc_reference.db` — FCC codes don't change
@@ -369,6 +380,7 @@ Run the same search after a database update to see what changed!!
 | fcc.db | em | 10,446,808 | Emission designators |
 | fcc.db | cities | 31,257 | US cities for offline lookup |
 | fcc.db | amateur | 3,346,184 | Ham radio callsigns |
+| fcc.db | gmrs | 578,933 | GMRS radio callsigns |
 | fcc_reference.db | emission_lookup | 63+ | Emission designator decoder |
 | fcc_reference.db | station_class | 36+ | Station class decoder |
 
@@ -388,6 +400,7 @@ cp ~/fcc-scanner/fcc_reference.db ~/your-backup-location/
 - `fcc.db` — rebuilt from FCC downloads any time (~25 min)
 - `data/*.dat` — re-downloaded from FCC
 - `amateur/*.dat` — re-downloaded from FCC
+- `gmrs/*.dat` — re-downloaded from FCC
 
 **GitHub:** https://github.com/KJ7TNY/fcc-uls-scanner
 
@@ -450,7 +463,7 @@ cp ~/fcc-scanner/fcc_reference.db ~/your-backup-location/
   use call sign or FRN search to find them
 
 - **Two tools, one jailhouse:** search_fcc.py for deep Part 90 research,
-  hamcall.py for quick ham ID — both read the same fcc.db database!!
+  hamcall.py for quick ham & gmrs ID — both read the same fcc.db database!!
 
 ---
 
