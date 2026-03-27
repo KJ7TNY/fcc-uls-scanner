@@ -106,13 +106,23 @@ https://data.fcc.gov/download/pub/uls/complete/a_amat.zip
 unzip ~/Downloads/a_amat.zip -d ~/fcc-scanner/amateur/
 ```
 
-### Step 4 — Install tkinter (one time only — needed for HamCall GUI)
+### Step 4 — Download the Amateur Radio Database
+
+```
+https://data.fcc.gov/download/pub/uls/complete/l_gmrs.zip
+```
+
+```bash
+unzip ~/Downloads/l_gmrs.zip -d ~/fcc-scanner/gmrs/
+```
+
+### Step 5 — Install tkinter (one time only — needed for HamCall GUI)
 
 ```bash
 sudo apt install python3-tk
 ```
 
-### Step 5 — Build All the Databases
+### Step 6 — Build All the Databases
 
 Run these scripts IN ORDER:
 
