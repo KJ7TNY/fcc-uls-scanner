@@ -498,7 +498,7 @@ class HamCallApp:
 def main():
     if not os.path.exists(DB_PATH):
         print(f"⚠  Database not found at {DB_PATH}")
-        print("   Run import_fcc.py and import_amateur.py first!")
+        print("   Run import_fcc.py, import_amateur.py and import_gmrs.py first!")
         sys.exit(1)
 
     root = tk.Tk()
