@@ -106,7 +106,7 @@ https://data.fcc.gov/download/pub/uls/complete/a_amat.zip
 unzip ~/Downloads/a_amat.zip -d ~/fcc-scanner/amateur/
 ```
 
-### Step 4 — Download the Amateur Radio Database
+### Step 4 — Download the GMRS Radio Database
 
 ```
 https://data.fcc.gov/download/pub/uls/complete/l_gmrs.zip
