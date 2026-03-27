@@ -69,10 +69,9 @@ TOOLS THAT ACCESS THE JAILHOUSE:
 │   ├── EN.dat
 │   ├── AM.dat
 │   └── (other FCC files)
-├── gmrs/            ← FCC Amateur Radio .dat files
+├── gmrs/               ← FCC GMRS Radio .dat files
 │   ├── HD.dat
 │   ├── EN.dat
-│   ├── AM.dat
 │   └── (other FCC files)
 └── reports/            ← All saved search results go here (timestamped)
 ```
