@@ -50,6 +50,7 @@ TOOLS THAT ACCESS THE JAILHOUSE:
 ├── add_cities.py       ← Step 4: Add offline city coordinates (run once)
 ├── build_reference.py  ← Step 5: Build permanent reference database (run once)
 ├── import_amateur.py   ← Step 6: Import amateur radio callsign database
+├── import_gmrs.py   ← Step 7: Import gmrs radio callsign database
 ├── search_fcc.py       ← Part 90 search tool (terminal)
 ├── hamcall.py          ← Ham callsign lookup (GUI desktop app!!)
 ├── uscities.csv        ← US cities database (31,257 cities with GPS coords)
@@ -63,6 +64,11 @@ TOOLS THAT ACCESS THE JAILHOUSE:
 │   ├── EM.dat
 │   └── (other FCC files)
 ├── amateur/            ← FCC Amateur Radio .dat files
+│   ├── HD.dat
+│   ├── EN.dat
+│   ├── AM.dat
+│   └── (other FCC files)
+├── gmrs/            ← FCC Amateur Radio .dat files
 │   ├── HD.dat
 │   ├── EN.dat
 │   ├── AM.dat
@@ -118,6 +124,7 @@ python3 add_em.py
 python3 add_cities.py
 python3 build_reference.py
 python3 import_amateur.py
+python3 import_gmrs.py
 ```
 
 **What each script does:**
@@ -239,7 +246,7 @@ cat > ~/Desktop/HamCall.desktop << 'EOF'
 Version=1.0
 Type=Application
 Name=HamCall
-Comment=Amateur & GMRS Callsign Lookup
+Comment=Amateur - GMRS Callsign Lookup
 Exec=python3 /home/minty/fcc-scanner/hamcall.py
 Icon=network-wireless
 Terminal=false
