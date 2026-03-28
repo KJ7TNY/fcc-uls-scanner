@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 """
-HamCall — Amateur Radio Callsign Lookup
-========================================
-A simple desktop GUI for looking up FCC amateur radio callsigns
-from the local fcc.db database.
+HamCall+ — Amateur & GMRS Callsign Lookup
+==========================================
+Smart auto-routing callsign lookup — just type and hit ENTER!
+No service selector needed — HamCall+ figures it out automatically:
+  4, 5, or 6 characters  →  Ham (amateur table)
+  7 characters           →  GMRS (gmrs table)
 
-Phase 1: Callsign lookup
+Built on fcc.db — 3.3M ham callsigns + 578K GMRS licenses — fully offline!!
+
+Phase 1: Callsign lookup (Ham + GMRS auto-routed)
 Phase 2: DX logging, notes, photos (coming soon!)
 
 Usage:
     python3 hamcall.py
 
 Requires:
-    - fcc.db with amateur table loaded (run import_amateur.py first)
+    - fcc.db with amateur and gmrs tables loaded
+    - Run import_amateur.py and import_gmrs.py first
 """
 
 import tkinter as tk
@@ -25,19 +30,19 @@ import sys
 DB_PATH = os.path.expanduser("~/fcc-scanner/fcc.db")
 
 # ── Colors — Dark radio terminal aesthetic ─────────────────────
-BG_DARK    = "#0a0e0a"   # near black with green tint
-BG_PANEL   = "#0f1a0f"   # slightly lighter panel
-BG_INPUT   = "#141f14"   # input field background
-FG_GREEN   = "#00ff41"   # bright matrix green
-FG_DIM     = "#4a9e4a"   # dimmed green
-FG_AMBER   = "#ffd700"   # amber accent for labels
-FG_WHITE   = "#e8f5e8"   # soft white-green for values
-FG_RED     = "#ff6666"   # error / expired
-FG_ACTIVE  = "#00ff41"   # active status
-FG_EXPIRED = "#ffb000"   # amber for expired
-FG_CANCEL  = "#ff6666"   # red for cancelled
-BORDER     = "#2a6d2a"   # subtle border
-HIGHLIGHT  = "#004400"   # highlight color
+BG_DARK    = "#0a0e0a"
+BG_PANEL   = "#0f1a0f"
+BG_INPUT   = "#141f14"
+FG_GREEN   = "#00ff41"
+FG_DIM     = "#4a9e4a"
+FG_AMBER   = "#ffd700"
+FG_WHITE   = "#e8f5e8"
+FG_RED     = "#ff6666"
+FG_ACTIVE  = "#00ff41"
+FG_EXPIRED = "#ffb000"
+FG_CANCEL  = "#ff6666"
+BORDER     = "#2a6d2a"
+HIGHLIGHT  = "#004400"
 
 # ── License class decoder ──────────────────────────────────────
 CLASS_MAP = {
@@ -63,19 +68,27 @@ STATUS_MAP = {
 }
 
 GMRS_STATUS_MAP = {
-    "A": ("Active",      FG_ACTIVE),
-    "E": ("Expired",     FG_EXPIRED),
-    "C": ("Cancelled",   FG_CANCEL),
-    "T": ("Terminated",  FG_CANCEL),
-    "":  ("Unknown",     FG_DIM),
+    "A": ("Active",     FG_ACTIVE),
+    "E": ("Expired",    FG_EXPIRED),
+    "C": ("Cancelled",  FG_CANCEL),
+    "T": ("Terminated", FG_CANCEL),
+    "":  ("Unknown",    FG_DIM),
 }
+
+
+def detect_service(callsign):
+    """
+    Auto-detect service type from callsign length.
+    GMRS calls are always 7 characters (4 letters + 3 digits e.g. WRJV291)
+    Ham calls are 4, 5, or 6 characters (e.g. W7AB, KJ7TNY, KD9ABC)
+    """
+    return "gmrs" if len(callsign.strip()) == 7 else "amateur"
 
 
 def lookup_callsign(callsign):
     """Query fcc.db for a ham callsign."""
     if not os.path.exists(DB_PATH):
         return None, "Database not found! Run import_fcc.py first."
-
     try:
         con = sqlite3.connect(DB_PATH)
         con.row_factory = sqlite3.Row
@@ -97,7 +110,6 @@ def lookup_gmrs(callsign):
     """Query fcc.db for a GMRS callsign."""
     if not os.path.exists(DB_PATH):
         return None, "Database not found!"
-
     try:
         con = sqlite3.connect(DB_PATH)
         con.row_factory = sqlite3.Row
@@ -113,12 +125,12 @@ def lookup_gmrs(callsign):
 class HamCallApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("HamCall")
+        self.root.title("HamCall+")
         self.root.configure(bg=BG_DARK)
         self.root.resizable(False, False)
 
         # Center on screen
-        w, h = 550, 560
+        w, h = 550, 520
         sw = root.winfo_screenwidth()
         sh = root.winfo_screenheight()
         x = (sw - w) // 2
@@ -128,11 +140,9 @@ class HamCallApp:
         # Fonts
         self.font_title  = tkfont.Font(family="Courier", size=16, weight="bold")
         self.font_sub    = tkfont.Font(family="Courier", size=8)
-        self.font_input  = tkfont.Font(family="Courier", size=14, weight="bold")
         self.font_label  = tkfont.Font(family="Courier", size=10, weight="bold")
         self.font_value  = tkfont.Font(family="Courier", size=10)
         self.font_large  = tkfont.Font(family="Courier", size=18, weight="bold")
-        self.font_status = tkfont.Font(family="Courier", size=11, weight="bold")
         self.font_btn    = tkfont.Font(family="Courier", size=11, weight="bold")
 
         self._build_ui()
@@ -142,7 +152,7 @@ class HamCallApp:
         hdr = tk.Frame(self.root, bg=BG_DARK, pady=10)
         hdr.pack(fill="x", padx=20)
 
-        tk.Label(hdr, text="📻  HamCall   v2.01",
+        tk.Label(hdr, text="📻  HamCall+  v3.0",
                  font=self.font_title, bg=BG_DARK,
                  fg=FG_GREEN).pack(side="left")
 
@@ -221,46 +231,14 @@ class HamCallApp:
         )
         clr.pack(side="left", padx=(6, 0))
 
-        # Service selector
-        svc_row = tk.Frame(search_frame, bg=BG_DARK)
-        svc_row.pack(anchor="w", pady=(4,0))
-
-        tk.Label(svc_row, text="SERVICE:",
-                 font=self.font_label, bg=BG_DARK,
-                 fg=FG_AMBER).pack(side="left", padx=(0,8))
-
-        self.service_var = tk.StringVar(value="amateur")
-
-        rb_ham = tk.Radiobutton(
-            svc_row, text="Amateur",
-            variable=self.service_var, value="amateur",
-            font=self.font_label,
-            bg=BG_DARK, fg=FG_GREEN,
-            selectcolor=BG_DARK,
-            activebackground=BG_DARK,
-            activeforeground=FG_GREEN,
-            cursor="hand2",
-            command=self._service_changed
+        # Smart hint label — no selector, just a hint
+        self.hint = tk.Label(
+            search_frame,
+            text="Ham or GMRS — HamCall+ figures it out automatically!!",
+            font=self.font_sub,
+            bg=BG_DARK, fg=FG_DIM
         )
-        rb_ham.pack(side="left", padx=(0,16))
-
-        rb_gmrs = tk.Radiobutton(
-            svc_row, text="GMRS",
-            variable=self.service_var, value="gmrs",
-            font=self.font_label,
-            bg=BG_DARK, fg=FG_GREEN,
-            selectcolor=BG_DARK,
-            activebackground=BG_DARK,
-            activeforeground=FG_GREEN,
-            cursor="hand2",
-            command=self._service_changed
-        )
-        rb_gmrs.pack(side="left")
-
-        # Hint
-        self.hint = tk.Label(search_frame, text="Press ENTER or click LOOK UP",
-                             font=self.font_sub, bg=BG_DARK, fg=FG_DIM)
-        self.hint.pack(anchor="w")
+        self.hint.pack(anchor="w", pady=(4, 0))
 
         # Separator
         tk.Frame(self.root, bg=FG_DIM, height=1).pack(fill="x", padx=20)
@@ -325,7 +303,7 @@ class HamCallApp:
 
         self.status_bar = tk.Label(
             footer,
-            text="Ready  —  Amateur: 3.3M  |  GMRS: 578K  —  fully offline",
+            text="Ready  —  Ham: 3.3M  |  GMRS: 578K  —  fully offline",
             font=self.font_sub,
             bg=BG_DARK, fg=FG_DIM
         )
@@ -334,19 +312,6 @@ class HamCallApp:
         tk.Label(footer, text="fcc.db",
                  font=self.font_sub,
                  bg=BG_DARK, fg=FG_DIM).pack(side="right")
-
-    def _service_changed(self):
-        """Called when service radio button changes."""
-        svc = self.service_var.get()
-        if svc == "gmrs":
-            self.hint.config(
-                text="GMRS — one license covers the whole family!!",
-                fg=FG_AMBER)
-        else:
-            self.hint.config(
-                text="Press ENTER or click LOOK UP",
-                fg=FG_DIM)
-        self._clear()
 
     def _auto_upper(self, event=None):
         """Auto-uppercase the callsign entry."""
@@ -359,30 +324,41 @@ class HamCallApp:
         self.lbl_callsign.config(text="- - - - -", fg=FG_DIM)
         for key, lbl in self.fields.items():
             lbl.config(text="—", fg=FG_DIM)
-        svc = self.service_var.get() if hasattr(self, "service_var") else "amateur"
-        if svc == "gmrs":
-            self.status_bar.config(
-                text="Ready  —  578,933 GMRS licenses  —  fully offline")
-        else:
-            self.status_bar.config(
-                text="Ready  —  Amateur: 3.3M  |  GMRS: 578K  —  fully offline")
+        self.hint.config(
+            text="Ham or GMRS — HamCall+ figures it out automatically!!",
+            fg=FG_DIM)
+        self.status_bar.config(
+            text="Ready  —  Ham: 3.3M  |  GMRS: 578K  —  fully offline",
+            fg=FG_DIM)
         self.entry.focus_set()
 
     def _do_lookup(self):
         callsign = self.entry_var.get().strip().upper()
         if not callsign:
-            self.status_bar.config(text="⚠  Enter a callsign first!", fg=FG_AMBER)
+            self.status_bar.config(
+                text="⚠  Enter a callsign first!", fg=FG_AMBER)
             return
 
-        self.status_bar.config(text=f"Looking up {callsign}...", fg=FG_DIM)
+        # ── Smart auto-routing ─────────────────────────────────
+        service = detect_service(callsign)
+
+        self.status_bar.config(
+            text=f"Looking up {callsign}...", fg=FG_DIM)
         self.root.update()
 
-        # Route to correct lookup based on service selector
-        svc = self.service_var.get()
-        if svc == "gmrs":
+        if service == "gmrs":
+            self.hint.config(
+                text="GMRS detected — 7 character callsign",
+                fg=FG_AMBER)
             self._do_gmrs_lookup(callsign)
-            return
+        else:
+            self.hint.config(
+                text="Ham detected — searching amateur database",
+                fg=FG_DIM)
+            self._do_ham_lookup(callsign)
 
+    def _do_ham_lookup(self, callsign):
+        """Look up ham callsign and populate fields."""
         row, error = lookup_callsign(callsign)
 
         if error:
@@ -396,31 +372,25 @@ class HamCallApp:
                 lbl.config(text="—", fg=FG_DIM)
             self.status_bar.config(
                 text=f"⚠  {callsign} not found — license may be expired or invalid",
-                fg=FG_AMBER
-            )
+                fg=FG_AMBER)
             return
 
-        # ── Populate fields ────────────────────────────────────
+        # Populate fields
         self.lbl_callsign.config(text=row["call_sign"], fg=FG_GREEN)
 
-        # Name
         name = row["full_name"] or f"{row['first_name']} {row['last_name']}".strip()
         self.fields["name"].config(text=name or "—", fg=FG_WHITE)
 
-        # Location
-        city     = row["city"] or ""
-        state    = row["state"] or ""
-        zipcode  = row["zip_code"] or ""
+        city    = row["city"] or ""
+        state   = row["state"] or ""
+        zipcode = row["zip_code"] or ""
         location = f"{city}, {state}  {zipcode}".strip(", ")
         self.fields["location"].config(text=location or "—", fg=FG_WHITE)
 
-        # License class
         class_code = row["class_code"] or ""
         class_str  = CLASS_MAP.get(class_code, class_code or "General")
-        group      = row["group_code"] or ""
         self.fields["cls"].config(text=class_str, fg=FG_WHITE)
 
-        # Expiration — calculate from grant date (FCC = 10 years)
         grant   = row["grant_date"] or ""
         expires = row["expired_date"] or ""
         if not expires and grant:
@@ -431,28 +401,28 @@ class HamCallApp:
                 expires = "—"
         self.fields["expires"].config(text=expires or "—", fg=FG_WHITE)
 
-        # FRN
-        self.fields["frn"].config(
-            text=row["frn"] or "—", fg=FG_WHITE)
+        self.fields["frn"].config(text=row["frn"] or "—", fg=FG_WHITE)
 
-        # Status
         status_code = row["status"] or ""
         status_text, status_color = STATUS_MAP.get(
             status_code, (status_code or "Unknown", FG_DIM))
         self.fields["status"].config(text=status_text, fg=status_color)
 
+        self.fields["note"].config(text="—", fg=FG_DIM)
+
         self.status_bar.config(
-            text=f"✓  Found: {row['call_sign']}  —  {name}",
-            fg=FG_GREEN
-        )
+            text=f"✓  Found: {row['call_sign']}  —  {name}  —  Amateur",
+            fg=FG_GREEN)
 
     def _do_gmrs_lookup(self, callsign):
         """Look up GMRS callsign and populate fields."""
         row, error = lookup_gmrs(callsign)
+
         if error:
             self.lbl_callsign.config(text="ERROR", fg=FG_RED)
             self.status_bar.config(text=f"⚠  {error}", fg=FG_RED)
             return
+
         if not row:
             self.lbl_callsign.config(text=callsign, fg=FG_RED)
             for key, lbl in self.fields.items():
