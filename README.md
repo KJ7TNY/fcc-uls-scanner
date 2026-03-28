@@ -33,8 +33,9 @@ fcc_reference.db  ←  PERMANENT REFERENCE (never rebuilt)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 TOOLS THAT ACCESS THE JAILHOUSE:
+  radiowave.py   ← THE FRONT DOOR — Radiowave Connection v1.0 launcher
   search_fcc.py  ← Part 90 scanner radio search tool
-  hamcall.py     ← Amateur - gmrs callsign GUI lookup
+  hamcall.py     ← Amateur & GMRS callsign GUI lookup
   (more tools coming as the project grows!!)
   (more tweaks coming soon really soon!!)
 ```
@@ -52,8 +53,9 @@ TOOLS THAT ACCESS THE JAILHOUSE:
 ├── build_reference.py  ← Step 5: Build permanent reference database (run once)
 ├── import_amateur.py   ← Step 6: Import amateur radio callsign database
 ├── import_gmrs.py      ← Step 7: Import gmrs radio callsign database
+├── radiowave.py        ← THE FRONT DOOR — Radiowave Connection v1.0 launcher!!
 ├── search_fcc.py       ← Part 90 search tool (terminal)
-├── hamcall.py          ← Ham callsign lookup (GUI desktop app!!)
+├── hamcall.py          ← Ham & GMRS callsign lookup (GUI desktop app!!)
 ├── uscities.csv        ← US cities database (31,257 cities with GPS coords)
 ├── fcc.db              ← Main SQLite database (2.4GB+ — rebuilt from data files)
 ├── fcc_reference.db    ← Permanent reference database (tiny, never rebuilt)
@@ -116,7 +118,7 @@ https://data.fcc.gov/download/pub/uls/complete/l_gmrs.zip
 unzip ~/Downloads/l_gmrs.zip -d ~/fcc-scanner/gmrs/
 ```
 
-### Step 5 — Install tkinter (one time only — needed for HamCall GUI)
+### Step 5 — Install tkinter (one time only — needed for GUI apps)
 
 ```bash
 sudo apt install python3-tk
@@ -157,7 +159,56 @@ Reference DB      : ✓ loaded
 
 ---
 
-## Tool 1 — search_fcc.py (Part 90 Scanner Search)
+## Tool 1 — radiowave.py (Radiowave Connection — The Front Door!!)
+
+```bash
+cd ~/fcc-scanner
+python3 radiowave.py
+```
+
+**The Swiss Army Knife launcher for the entire FCC ULS Scanner Suite!!**
+
+- Dark green terminal aesthetic — matches the whole tool family
+- Live dashboard shows real-time stats pulled straight from fcc.db
+- Sidebar buttons launch all tools with one click
+- Drag windows to a second monitor for a proper radio workstation!!
+- Room to grow — more tools plug in as the project expands
+
+**Dashboard stats shown on launch:**
+- Active Licenses — all Part 90 licenses in the jailhouse
+- Transmitter Sites — antenna locations with GPS coordinates
+- Ham Callsigns — licensed amateur radio operators
+- GMRS Licenses — family radio service licenses
+
+**Sidebar tools:**
+- 🔍 Search Transmitters — opens a terminal running search_fcc.py
+- 📡 HamCall Lookup — launches hamcall.py as its own floating window
+- 🔄 Update Databases — coming soon!!
+- 🔧 Toolbox — coming soon!!
+- 📋 Reports — coming soon!!
+
+### Desktop Shortcut for Radiowave Connection
+
+```bash
+cat > ~/Desktop/Radiowave.desktop << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Radiowave Connection
+Comment=FCC ULS Scanner Suite Launcher
+Exec=python3 /home/minty/fcc-scanner/radiowave.py
+Icon=network-wireless
+Terminal=false
+Categories=HamRadio;
+EOF
+chmod +x ~/Desktop/Radiowave.desktop
+```
+
+> ✅ Launch Radiowave Connection from the desktop and everything else launches from there!!
+
+---
+
+## Tool 2 — search_fcc.py (Part 90 Scanner Search)
 
 ```bash
 cd ~/fcc-scanner
@@ -165,6 +216,8 @@ python3 search_fcc.py
 ```
 
 **Focused entirely on Part 90 Land Mobile — scanner radio research!!**
+
+> ✅ TIP: Launch this from Radiowave Connection — click 🔍 Search Transmitters in the sidebar!!
 
 ### Search Options
 
@@ -227,21 +280,24 @@ python3 search_fcc.py
 
 ---
 
-## Tool 2 — hamcall.py (Amateur & GMRS Callsign GUI)
+## Tool 3 — hamcall.py (Amateur & GMRS Callsign GUI)
 
 ```bash
 cd ~/fcc-scanner
 python3 hamcall.py
 ```
 
-**A desktop GUI app for quick ham callsign lookups — completely offline!!**
+**A desktop GUI app for quick ham & GMRS callsign lookups — completely offline!!**
+
+> ✅ TIP: Launch this from Radiowave Connection — click 📡 HamCall Lookup in the sidebar!!
 
 - Dark terminal aesthetic — green on black radio feel
 - Type any callsign, press ENTER — instant results
 - Shows name, location, license class, expiration, FRN, status
 - 3,346,184 licensed hams in the database
 - 578,933 GMRS licenses in the database
-- Active = green, expired/not found = red
+- Toggle between Amateur and GMRS with the service selector
+- Active = green, expired = amber, cancelled = red
 
 **Future phases planned:**
 - DX contact logging
@@ -432,7 +488,7 @@ cp ~/fcc-scanner/fcc_reference.db ~/your-backup-location/
 **"Reference DB: ✗"**
 → Run build_reference.py
 
-**HamCall won't start — ModuleNotFoundError tkinter**
+**Radiowave Connection or HamCall won't start — ModuleNotFoundError tkinter**
 → Run: `sudo apt install python3-tk`
 
 **"City not found"**
@@ -447,6 +503,10 @@ cp ~/fcc-scanner/fcc_reference.db ~/your-backup-location/
 → Re-download a_amat.zip and run import_amateur.py
 → Blank AM.dat record = General class
 
+**Radiowave Connection Search Transmitters button does nothing**
+→ No terminal emulator found — install one: `sudo apt install xterm`
+→ Or run search_fcc.py directly from a terminal
+
 **FCC download URL broken**
 → Search "FCC ULS complete database download private land mobile"
 → Look for current URL at data.fcc.gov
@@ -454,6 +514,11 @@ cp ~/fcc-scanner/fcc_reference.db ~/your-backup-location/
 ---
 
 ## Tips & Tricks
+
+- **Start here:** Launch `radiowave.py` first — it's the front door to everything!!
+
+- **Two monitor setup:** Drag HamCall to monitor 2, keep Radiowave Connection
+  on monitor 1 — proper radio research workstation!!
 
 - **Single frequency search:** In option 6, press ENTER on high frequency
   to search for one exact frequency — no range needed!
@@ -480,8 +545,9 @@ cp ~/fcc-scanner/fcc_reference.db ~/your-backup-location/
   on the FCC website but no coordinates in the download — FCC data gap,
   use call sign or FRN search to find them
 
-- **Two tools, one jailhouse:** search_fcc.py for deep Part 90 research,
-  hamcall.py for quick ham & gmrs ID — both read the same fcc.db database!!
+- **Three tools, one jailhouse:** radiowave.py is the front door,
+  search_fcc.py for deep Part 90 research, hamcall.py for quick
+  ham & gmrs ID — all reading the same fcc.db database!!
 
 ---
 
