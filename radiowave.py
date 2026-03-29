@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Radiowave Connection v1.1
+Radiowave Connection v1.2
 ==========================
 The Swiss Army Knife launcher for the FCC ULS Scanner Suite.
 Built on the same fcc.db jailhouse that powers search_fcc.py and hamcall.py.
@@ -88,13 +88,13 @@ class RadiowaveApp:
         self.root.resizable(True, True)
 
         # Window size and center
-        w, h = 820, 560
+        w, h = 860, 580                    # ← Slightly wider
         sw = root.winfo_screenwidth()
         sh = root.winfo_screenheight()
         x = (sw - w) // 2
         y = (sh - h) // 2
         root.geometry(f"{w}x{h}+{x}+{y}")
-        root.minsize(700, 480)
+        root.minsize(820, 520)             # ← Better minimum size
 
         # Fonts
         self.font_title      = tkfont.Font(family="Courier", size=15, weight="bold")
@@ -139,14 +139,15 @@ class RadiowaveApp:
         body.pack(fill="both", expand=True)
 
         # ── LEFT SIDEBAR ────────────────────────────────────────
-        sidebar = tk.Frame(body, bg=BG_SIDEBAR, width=270)
+        sidebar = tk.Frame(body, bg=BG_SIDEBAR)
         sidebar.pack(side="left", fill="y")
-        sidebar.pack_propagate(False)
+        # No fixed width — auto-sizes to content!
 
         tk.Label(sidebar, text="— TOOLS —",
                  font=self.font_statlbl,
-                 bg=BG_SIDEBAR, fg=FG_DIM).pack(pady=(16, 8))
+                 bg=BG_SIDEBAR, fg=FG_DIM).pack(pady=(16, 8), padx=12)
 
+        # Active buttons
         self.btn_search = self._make_sidebar_btn(
             sidebar,
             "🔍  Search Transmitters",
@@ -162,11 +163,11 @@ class RadiowaveApp:
         )
 
         # ── INFO section ────────────────────────────────────────
-        tk.Frame(sidebar, bg=BORDER, height=1).pack(fill="x", padx=16, pady=12)
+        tk.Frame(sidebar, bg=BORDER, height=1).pack(fill="x", padx=12, pady=12)
 
         tk.Label(sidebar, text="— INFO —",
                  font=self.font_statlbl,
-                 bg=BG_SIDEBAR, fg=FG_DIM).pack(pady=(0, 8))
+                 bg=BG_SIDEBAR, fg=FG_DIM).pack(pady=(0, 8), padx=12)
 
         self.btn_readme = self._make_sidebar_btn(
             sidebar,
@@ -176,29 +177,33 @@ class RadiowaveApp:
         )
 
         # ── COMING SOON ─────────────────────────────────────────
-        tk.Frame(sidebar, bg=BORDER, height=1).pack(fill="x", padx=16, pady=12)
+        tk.Frame(sidebar, bg=BORDER, height=1).pack(fill="x", padx=12, pady=12)
 
         tk.Label(sidebar, text="— COMING SOON —",
                  font=self.font_statlbl,
-                 bg=BG_SIDEBAR, fg=FG_DIM).pack(pady=(0, 8))
+                 bg=BG_SIDEBAR, fg=FG_DIM).pack(pady=(0, 8), padx=12)
 
         self._make_sidebar_btn_dim(sidebar, "🔄  Update Databases",  "Download + import")
         self._make_sidebar_btn_dim(sidebar, "🔧  Toolbox",           "Ham radio utilities")
-        self._make_sidebar_btn_dim(sidebar, "📋  Reports",           "Saved search results")
+        self._make_sidebar_btn(   sidebar, "📋  Reports",           "View saved searches",
+                                  self._show_reports)
 
-        # Sidebar bottom — db status
+        # Push the database status to the bottom
         tk.Frame(sidebar, bg=BG_SIDEBAR).pack(fill="y", expand=True)
-        tk.Frame(sidebar, bg=BORDER, height=1).pack(fill="x", padx=16, pady=4)
+
+        tk.Frame(sidebar, bg=BORDER, height=1).pack(fill="x", padx=12, pady=4)
 
         self.lbl_db_status = tk.Label(
             sidebar,
             text="fcc.db — checking...",
             font=self.font_statlbl,
             bg=BG_SIDEBAR, fg=FG_DIM,
-            wraplength=170, justify="center"
+            wraplength=240,          # Helps if text gets long
+            justify="center"
         )
-        self.lbl_db_status.pack(pady=(4, 12))
+        self.lbl_db_status.pack(pady=(4, 16), padx=12)
 
+        # Sidebar right border — the green line!
         tk.Frame(body, bg=BORDER, width=1).pack(side="left", fill="y")
 
         # ── RIGHT CONTENT PANEL ─────────────────────────────────
@@ -225,8 +230,9 @@ class RadiowaveApp:
                  font=self.font_status,
                  bg=BG_SIDEBAR, fg=FG_DIM).pack(side="right", padx=12)
 
+
     def _make_sidebar_btn(self, parent, title, subtitle, command):
-        """Create an active sidebar button."""
+        """Create an active sidebar button - auto-sizing and safe padding."""
         frame = tk.Frame(parent, bg=BG_SIDEBAR, cursor="hand2")
         frame.pack(fill="x", padx=12, pady=3)
 
@@ -235,17 +241,34 @@ class RadiowaveApp:
                          highlightthickness=1)
         inner.pack(fill="x")
 
-        tk.Label(inner, text=title,
-                 font=self.font_label,
-                 bg=BTN_ACTIVE, fg=FG_GREEN,
-                 anchor="w", padx=10, pady=4).pack(fill="x")
+        # Title label
+        title_lbl = tk.Label(inner, 
+                             text=title,
+                             font=self.font_label,
+                             bg=BTN_ACTIVE, 
+                             fg=FG_GREEN,
+                             anchor="w", 
+                             justify="left",
+                             padx=12, 
+                             pady=4,           # ← Safe single value instead of tuple
+                             wraplength=240)
+        title_lbl.pack(fill="x")
 
-        tk.Label(inner, text=subtitle,
-                 font=self.font_btnsub,
-                 bg=BTN_ACTIVE, fg=FG_DIM,
-                 anchor="w", padx=10, pady=2).pack(fill="x")
+        # Subtitle label
+        sub_lbl = tk.Label(inner, 
+                           text=subtitle,
+                           font=self.font_btnsub,
+                           bg=BTN_ACTIVE, 
+                           fg=FG_DIM,
+                           anchor="w", 
+                           justify="left",
+                           padx=12, 
+                           pady=4,           # ← Safe single value
+                           wraplength=240)
+        sub_lbl.pack(fill="x")
 
-        for widget in [frame, inner] + inner.winfo_children():
+        # Bind clicks to the whole button
+        for widget in [frame, inner, title_lbl, sub_lbl]:
             widget.bind("<Button-1>", lambda e, cmd=command, f=inner: self._btn_click(cmd, f))
             widget.bind("<Enter>",    lambda e, f=inner: f.config(bg=HIGHLIGHT))
             widget.bind("<Leave>",    lambda e, f=inner: f.config(bg=BTN_ACTIVE))
@@ -558,6 +581,169 @@ class RadiowaveApp:
         self.readme_text.config(state="disabled")
         self.readme_text.yview_moveto(0)
         self._set_status("📖  README loaded — scroll to read  |  click ⌂ Dashboard to go back", FG_GREEN)
+
+    # ── REPORTS VIEWER ──────────────────────────────────────────
+    def _show_reports(self):
+        """Show list of saved reports — click one to read it."""
+        self._clear_content()
+        self._set_status("📋  Reports — saved search results", FG_GREEN)
+
+        reports_dir = os.path.join(BASE_DIR, "reports")
+
+        # Header
+        hdr = tk.Frame(self.content, bg=BG_DARK, pady=12)
+        hdr.pack(fill="x", padx=24)
+
+        tk.Label(hdr, text="📋  Saved Reports",
+                 font=self.font_btn,
+                 bg=BG_DARK, fg=FG_GREEN).pack(side="left")
+
+        back_btn = tk.Button(hdr,
+                             text="⌂  Dashboard",
+                             font=self.font_statlbl,
+                             bg=BTN_ACTIVE, fg=FG_DIM,
+                             activebackground=HIGHLIGHT,
+                             activeforeground=FG_GREEN,
+                             relief="flat", bd=0,
+                             padx=10, pady=4,
+                             cursor="hand2",
+                             command=self._show_dashboard)
+        back_btn.pack(side="right")
+        back_btn.bind("<Enter>", lambda e: back_btn.config(bg=HIGHLIGHT, fg=FG_GREEN))
+        back_btn.bind("<Leave>", lambda e: back_btn.config(bg=BTN_ACTIVE, fg=FG_DIM))
+
+        tk.Frame(self.content, bg=BORDER, height=1).pack(fill="x", padx=24)
+
+        # Check reports folder exists
+        if not os.path.exists(reports_dir):
+            tk.Label(self.content,
+                     text="\n  No reports folder found yet.\n  Run a search and save it first!",
+                     font=self.font_value,
+                     bg=BG_DARK, fg=FG_DIM,
+                     justify="left").pack(anchor="w", padx=24, pady=20)
+            return
+
+        # Get report files sorted newest first
+        files = sorted(
+            [f for f in os.listdir(reports_dir) if f.endswith(".txt")],
+            reverse=True
+        )
+
+        if not files:
+            tk.Label(self.content,
+                     text="\n  No saved reports yet.\n  Run a search and save it — files appear here!",
+                     font=self.font_value,
+                     bg=BG_DARK, fg=FG_DIM,
+                     justify="left").pack(anchor="w", padx=24, pady=20)
+            return
+
+        # Split view — file list left, content right
+        split = tk.Frame(self.content, bg=BG_DARK)
+        split.pack(fill="both", expand=True, padx=16, pady=8)
+
+        # ── File list panel — auto-sizes to longest filename ────
+        list_frame = tk.Frame(split, bg=BG_SIDEBAR)
+        list_frame.pack(side="left", fill="y")
+
+        tk.Label(list_frame,
+                 text=f"  {len(files)} report(s) — newest first",
+                 font=self.font_statlbl,
+                 bg=BG_SIDEBAR, fg=FG_DIM).pack(anchor="w", pady=(8, 4))
+
+        tk.Frame(list_frame, bg=BORDER, height=1).pack(fill="x")
+
+        list_scroll = tk.Scrollbar(list_frame, bg=BG_SIDEBAR,
+                                   troughcolor=BG_DARK,
+                                   activebackground=FG_DIM)
+        list_scroll.pack(side="right", fill="y")
+
+        # Calculate width from longest filename so nothing gets chopped
+        max_len = max(len(f) for f in files) + 4 - 4  # -4 for .txt we strip
+        self.file_listbox = tk.Listbox(
+            list_frame,
+            bg=BG_PANEL,
+            fg=FG_WHITE,
+            font=self.font_statlbl,
+            relief="flat",
+            bd=0,
+            width=max_len,
+            selectbackground=HIGHLIGHT,
+            selectforeground=FG_GREEN,
+            activestyle="none",
+            yscrollcommand=list_scroll.set,
+            cursor="hand2"
+        )
+        self.file_listbox.pack(side="left", fill="both", expand=True)
+        list_scroll.config(command=self.file_listbox.yview)
+
+        for f in files:
+            display = f[:-4] if f.endswith(".txt") else f  # strip .txt for display
+            self.file_listbox.insert(tk.END, f"  {display}")
+
+        # ── Divider ─────────────────────────────────────────────
+        tk.Frame(split, bg=BORDER, width=1).pack(side="left", fill="y")
+
+        # ── Report content panel ─────────────────────────────────
+        content_frame = tk.Frame(split, bg=BG_DARK)
+        content_frame.pack(side="left", fill="both", expand=True)
+
+        tk.Label(content_frame,
+                 text="  ← Select a report to read it",
+                 font=self.font_statlbl,
+                 bg=BG_DARK, fg=FG_DIM).pack(anchor="w", pady=(8, 4))
+
+        tk.Frame(content_frame, bg=BORDER, height=1).pack(fill="x")
+
+        report_scroll = tk.Scrollbar(content_frame, bg=BG_SIDEBAR,
+                                     troughcolor=BG_DARK,
+                                     activebackground=FG_DIM)
+        report_scroll.pack(side="right", fill="y")
+
+        self.report_text = tk.Text(
+            content_frame,
+            bg=BG_PANEL,
+            fg=FG_AMBER,
+            font=self.font_readme,
+            relief="flat",
+            bd=0,
+            wrap="word",
+            state="disabled",
+            yscrollcommand=report_scroll.set,
+            padx=12,
+            pady=8,
+        )
+        self.report_text.pack(side="left", fill="both", expand=True)
+        report_scroll.config(command=self.report_text.yview)
+
+        self._report_files = files
+        self._reports_dir  = reports_dir
+        self.file_listbox.bind("<<ListboxSelect>>", self._load_report)
+
+        self._set_status(
+            f"📋  {len(files)} saved report(s) — click one to read",
+            FG_GREEN)
+
+    def _load_report(self, event):
+        """Load selected report file into the viewer."""
+        selection = self.file_listbox.curselection()
+        if not selection:
+            return
+
+        filename = self._report_files[selection[0]]
+        filepath = os.path.join(self._reports_dir, filename)
+
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                content = f.read()
+        except Exception as e:
+            content = f"Error reading file: {e}"
+
+        self.report_text.config(state="normal")
+        self.report_text.delete("1.0", tk.END)
+        self.report_text.insert(tk.END, content)
+        self.report_text.config(state="disabled")
+        self.report_text.yview_moveto(0)
+        self._set_status(f"📋  Loaded: {filename}", FG_GREEN)
 
     # ── TOOL LAUNCHERS ──────────────────────────────────────────
     def _launch_search(self):
