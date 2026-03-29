@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Radiowave Connection v1.2
+Radiowave Connection v1.2.1
 ==========================
 The Swiss Army Knife launcher for the FCC ULS Scanner Suite.
 Built on the same fcc.db jailhouse that powers search_fcc.py and hamcall.py.
@@ -123,7 +123,7 @@ class RadiowaveApp:
         title_bar.pack(fill="x")
 
         tk.Label(title_bar,
-                 text="📻  Radiowave Connection  v1.1",
+                 text="📻  Radiowave Connection  v1.2.1",
                  font=self.font_title,
                  bg=BG_SIDEBAR, fg=FG_GREEN).pack(side="left", padx=16)
 
@@ -176,6 +176,10 @@ class RadiowaveApp:
             self._show_readme
         )
 
+        self._make_sidebar_btn(sidebar, "📋  Reports",
+                                "View saved searches",
+                                self._show_reports)
+
         # ── COMING SOON ─────────────────────────────────────────
         tk.Frame(sidebar, bg=BORDER, height=1).pack(fill="x", padx=12, pady=12)
 
@@ -185,8 +189,6 @@ class RadiowaveApp:
 
         self._make_sidebar_btn_dim(sidebar, "🔄  Update Databases",  "Download + import")
         self._make_sidebar_btn_dim(sidebar, "🔧  Toolbox",           "Ham radio utilities")
-        self._make_sidebar_btn(   sidebar, "📋  Reports",           "View saved searches",
-                                  self._show_reports)
 
         # Push the database status to the bottom
         tk.Frame(sidebar, bg=BG_SIDEBAR).pack(fill="y", expand=True)
@@ -312,7 +314,7 @@ class RadiowaveApp:
         hdr.pack(fill="x", padx=24)
 
         tk.Label(hdr,
-                 text="Welcome to Radiowave Connection",
+                 text="Welcome to the Radiowave Connection",
                  font=self.font_btn,
                  bg=BG_DARK, fg=FG_GREEN).pack(anchor="w")
 
@@ -480,6 +482,8 @@ class RadiowaveApp:
             font=self.font_readme,
             relief="flat",
             bd=0,
+            highlightthickness=0,
+            highlightbackground=BG_PANEL,
             wrap="word",
             cursor="arrow",
             state="disabled",
@@ -492,6 +496,7 @@ class RadiowaveApp:
         )
         self.readme_text.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=self.readme_text.yview)
+        self.readme_text.bind("<Button-3>", lambda e: self._show_copy_menu(e, self.readme_text))
 
         # Text tags for markdown styling
         self.readme_text.tag_configure("h1",
@@ -655,10 +660,20 @@ class RadiowaveApp:
         list_scroll = tk.Scrollbar(list_frame, bg=BG_SIDEBAR,
                                    troughcolor=BG_DARK,
                                    activebackground=FG_DIM)
-        list_scroll.pack(side="right", fill="y")
+        # Don't pack yet — auto-hide scrollbar shows only when needed!
 
         # Calculate width from longest filename so nothing gets chopped
         max_len = max(len(f) for f in files) + 4 - 4  # -4 for .txt we strip
+
+        def _autohide_scroll(first, last):
+            """Show scrollbar only when list overflows."""
+            first, last = float(first), float(last)
+            if first <= 0.0 and last >= 1.0:
+                list_scroll.pack_forget()   # all items visible — hide it
+            else:
+                list_scroll.pack(side="right", fill="y")  # overflow — show it
+            list_scroll.set(first, last)
+
         self.file_listbox = tk.Listbox(
             list_frame,
             bg=BG_PANEL,
@@ -666,11 +681,14 @@ class RadiowaveApp:
             font=self.font_statlbl,
             relief="flat",
             bd=0,
+            highlightthickness=0,
+            highlightbackground=BG_PANEL,
             width=max_len,
             selectbackground=HIGHLIGHT,
             selectforeground=FG_GREEN,
             activestyle="none",
-            yscrollcommand=list_scroll.set,
+            exportselection=0,
+            yscrollcommand=_autohide_scroll,
             cursor="hand2"
         )
         self.file_listbox.pack(side="left", fill="both", expand=True)
@@ -687,10 +705,12 @@ class RadiowaveApp:
         content_frame = tk.Frame(split, bg=BG_DARK)
         content_frame.pack(side="left", fill="both", expand=True)
 
-        tk.Label(content_frame,
+        self.report_filename_lbl = tk.Label(
+                 content_frame,
                  text="  ← Select a report to read it",
                  font=self.font_statlbl,
-                 bg=BG_DARK, fg=FG_DIM).pack(anchor="w", pady=(8, 4))
+                 bg=BG_DARK, fg=FG_DIM)
+        self.report_filename_lbl.pack(anchor="w", pady=(8, 4))
 
         tk.Frame(content_frame, bg=BORDER, height=1).pack(fill="x")
 
@@ -706,6 +726,8 @@ class RadiowaveApp:
             font=self.font_readme,
             relief="flat",
             bd=0,
+            highlightthickness=0,
+            highlightbackground=BG_PANEL,
             wrap="word",
             state="disabled",
             yscrollcommand=report_scroll.set,
@@ -714,6 +736,7 @@ class RadiowaveApp:
         )
         self.report_text.pack(side="left", fill="both", expand=True)
         report_scroll.config(command=self.report_text.yview)
+        self.report_text.bind("<Button-3>", lambda e: self._show_copy_menu(e, self.report_text))
 
         self._report_files = files
         self._reports_dir  = reports_dir
@@ -722,6 +745,44 @@ class RadiowaveApp:
         self._set_status(
             f"📋  {len(files)} saved report(s) — click one to read",
             FG_GREEN)
+
+    def _show_copy_menu(self, event, widget):
+        """Show right-click context menu with Copy and Select All."""
+        menu = tk.Menu(self.root,
+                       tearoff=0,
+                       bg=BG_PANEL,
+                       fg=FG_GREEN,
+                       activebackground=HIGHLIGHT,
+                       activeforeground=FG_GREEN,
+                       relief="flat",
+                       bd=1)
+        menu.add_command(
+            label="  Copy  ",
+            command=lambda: self._copy_selection(widget)
+        )
+        menu.add_command(
+            label="  Select All  ",
+            command=lambda: self._select_all(widget)
+        )
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def _copy_selection(self, widget):
+        """Copy selected text to clipboard."""
+        try:
+            selected = widget.get(tk.SEL_FIRST, tk.SEL_LAST)
+            self.root.clipboard_clear()
+            self.root.clipboard_append(selected)
+        except tk.TclError:
+            pass
+
+    def _select_all(self, widget):
+        """Select all text in widget."""
+        widget.tag_add(tk.SEL, "1.0", tk.END)
+        widget.mark_set(tk.INSERT, "1.0")
+        widget.see(tk.INSERT)
 
     def _load_report(self, event):
         """Load selected report file into the viewer."""
@@ -738,12 +799,18 @@ class RadiowaveApp:
         except Exception as e:
             content = f"Error reading file: {e}"
 
+        # Update filename label at top of content panel
+        display_name = filename[:-4] if filename.endswith(".txt") else filename
+        self.report_filename_lbl.config(
+            text=f"  📋  {display_name}",
+            fg=FG_AMBER)
+
         self.report_text.config(state="normal")
         self.report_text.delete("1.0", tk.END)
         self.report_text.insert(tk.END, content)
         self.report_text.config(state="disabled")
         self.report_text.yview_moveto(0)
-        self._set_status(f"📋  Loaded: {filename}", FG_GREEN)
+        self._set_status(f"📋  {display_name}", FG_GREEN)
 
     # ── TOOL LAUNCHERS ──────────────────────────────────────────
     def _launch_search(self):
