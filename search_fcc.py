@@ -1127,14 +1127,42 @@ def search_by_frn(con):
 
 
 def search_by_frn(con):
-    print("\n--- FRN Search ---")
-    print("  FRN ties ALL licenses for one entity together — across all call signs!")
-    print("  Find the FRN in any search result, then use it here.\n")
+    print("\n--- FRN Search — Full Cross-Service Lookup ---")
+    print("  FRN ties ALL licenses for one entity together!")
+    print("  Searches Part 90, Amateur, and GMRS in one shot!!\n")
 
     frn = input("  Enter FRN (e.g. 0006610380): ").strip()
+    if not frn:
+        print("  ⚠  No FRN entered.")
+        return
 
-    # First show a summary of all call signs under this FRN
-    callsigns = con.execute("""
+    # ── Get entity name — check all three tables ───────────────────────────────
+    entity = con.execute("""
+        SELECT DISTINCT entity_name FROM en
+        WHERE (frn = ? OR CAST(frn AS INTEGER) = CAST(? AS INTEGER))
+          AND entity_type = 'L'
+          AND entity_name IS NOT NULL
+        LIMIT 1
+    """, (frn, frn)).fetchone()
+
+    if not entity:
+        entity = con.execute("""
+            SELECT DISTINCT full_name FROM amateur
+            WHERE frn = ? OR CAST(frn AS INTEGER) = CAST(? AS INTEGER)
+            LIMIT 1
+        """, (frn, frn)).fetchone()
+
+    if not entity:
+        entity = con.execute("""
+            SELECT DISTINCT full_name FROM gmrs
+            WHERE frn = ? OR CAST(frn AS INTEGER) = CAST(? AS INTEGER)
+            LIMIT 1
+        """, (frn, frn)).fetchone()
+
+    entity_name = entity[0] if entity else "Unknown"
+
+    # ── Part 90 call signs ─────────────────────────────────────────────────────
+    p90_callsigns = con.execute("""
         SELECT DISTINCT hd.call_sign
         FROM hd
         WHERE hd.unique_system_id IN (
@@ -1145,27 +1173,49 @@ def search_by_frn(con):
         AND hd.call_sign IS NOT NULL AND hd.call_sign != ''
         ORDER BY hd.call_sign
     """, (frn, frn)).fetchall()
+    p90_list = [r[0] for r in p90_callsigns if r[0]]
 
-    # Get entity name
-    entity = con.execute("""
-        SELECT DISTINCT entity_name FROM en
-        WHERE (frn = ? OR CAST(frn AS INTEGER) = CAST(? AS INTEGER))
-          AND entity_type = 'L'
-          AND entity_name IS NOT NULL
-        LIMIT 1
-    """, (frn, frn)).fetchone()
+    # ── Amateur licenses ───────────────────────────────────────────────────────
+    ham_rows = con.execute("""
+        SELECT call_sign, full_name, first_name, last_name,
+               city, state, zip_code, operator_class,
+               class_code, group_code, grant_date,
+               expired_date, frn, status
+        FROM amateur
+        WHERE frn = ? OR CAST(frn AS INTEGER) = CAST(? AS INTEGER)
+        ORDER BY call_sign
+    """, (frn, frn)).fetchall()
 
-    entity_name = entity[0] if entity else "Unknown"
-    cs_list = [r[0] for r in callsigns if r[0]]
+    # ── GMRS licenses ──────────────────────────────────────────────────────────
+    gmrs_rows = con.execute("""
+        SELECT call_sign, full_name, first_name, last_name,
+               city, state, zip_code, frn, status, expired_date
+        FROM gmrs
+        WHERE frn = ? OR CAST(frn AS INTEGER) = CAST(? AS INTEGER)
+        ORDER BY call_sign
+    """, (frn, frn)).fetchall()
 
+    # ── Header ─────────────────────────────────────────────────────────────────
     print(f"\n{'='*70}")
-    print(f"  FRN: {frn}")
-    print(f"  Entity: {entity_name}")
-    if cs_list:
-        print(f"  Call Signs ({len(cs_list)}): {'  '.join(cs_list)}")
+    print(f"  FRN      : {frn}")
+    print(f"  Entity   : {entity_name}")
+    if p90_list:
+        print(f"  Part 90  : {len(p90_list)} call sign(s) — {'  '.join(p90_list)}")
+    if ham_rows:
+        print(f"  Amateur  : {len(ham_rows)} license(s) found")
+    if gmrs_rows:
+        print(f"  GMRS     : {len(gmrs_rows)} license(s) found")
+    if not p90_list and not ham_rows and not gmrs_rows:
+        print(f"\n  ⚠  No licenses found for FRN {frn} in any service.")
+        print(f"{'='*70}")
+        return
     print(f"{'='*70}")
 
-    # Get all transmitter sites — include ones without coords too
+    # ── PART 90 transmitter sites ──────────────────────────────────────────────
+    print(f"\n  {'━'*66}")
+    print(f"  PART 90 — TRANSMITTER SITES")
+    print(f"  {'━'*66}")
+
     rows = con.execute(
         base_query() + """
         WHERE lo.unique_system_id IN (
@@ -1179,10 +1229,53 @@ def search_by_frn(con):
         (frn, frn)
     ).fetchall()
 
-    print_results(con, rows, f"All transmitter sites for FRN {frn} — {entity_name}")
-
     if rows:
-        save = input("\n  Save to file? (y/n): ").strip().lower()
+        print_results(con, rows, f"Part 90 transmitters for FRN {frn}")
+    else:
+        print(f"\n  No Part 90 transmitter sites found for this FRN.")
+
+    # ── AMATEUR licenses ───────────────────────────────────────────────────────
+    print(f"\n  {'━'*66}")
+    print(f"  AMATEUR RADIO LICENSES")
+    print(f"  {'━'*66}")
+
+    if ham_rows:
+        for r in ham_rows:
+            _print_ham(r)
+    else:
+        print(f"\n  No amateur radio licenses found for this FRN.")
+
+    # ── GMRS licenses ──────────────────────────────────────────────────────────
+    print(f"\n  {'━'*66}")
+    print(f"  GMRS LICENSES")
+    print(f"  {'━'*66}")
+
+    if gmrs_rows:
+        gmrs_status_map = {
+            "A": "Active",
+            "E": "Expired",
+            "C": "Cancelled",
+            "T": "Terminated",
+        }
+        for r in gmrs_rows:
+            name = r[1] or f"{r[2]} {r[3]}".strip()
+            status_str = gmrs_status_map.get(r[8] or "", r[8] or "Unknown")
+            print(f"  {'━'*55}")
+            print(f"  Call Sign : {r[0]}")
+            print(f"  Name      : {name}")
+            print(f"  Location  : {r[4] or ''}, {r[5] or ''}  {r[6] or ''}")
+            print(f"  Service   : GMRS Family License  462/467 MHz")
+            print(f"  Expires   : {r[9] or 'N/A'}")
+            print(f"  FRN       : {r[7] or 'N/A'}")
+            print(f"  Status    : {status_str}")
+            print(f"  Note      : Covers entire family — no test required")
+            print(f"  {'━'*55}")
+    else:
+        print(f"\n  No GMRS licenses found for this FRN.")
+
+    # ── Save option ────────────────────────────────────────────────────────────
+    if rows:
+        save = input("\n  Save Part 90 results to file? (y/n): ").strip().lower()
         if save == 'y':
             save_results(con, rows, f"results_frn_{frn}.txt")
 
