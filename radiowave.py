@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Radiowave Connection v1.0
+Radiowave Connection v1.1
 ==========================
 The Swiss Army Knife launcher for the FCC ULS Scanner Suite.
 Built on the same fcc.db jailhouse that powers search_fcc.py and hamcall.py.
@@ -22,8 +22,9 @@ import os
 import sys
 
 # ── Paths ──────────────────────────────────────────────────────
-BASE_DIR = os.path.expanduser("~/fcc-scanner")
-DB_PATH  = os.path.join(BASE_DIR, "fcc.db")
+BASE_DIR    = os.path.expanduser("~/fcc-scanner")
+DB_PATH     = os.path.join(BASE_DIR, "fcc.db")
+README_PATH = os.path.join(BASE_DIR, "README.md")
 
 # ── Colors — same dark radio terminal aesthetic as HamCall ─────
 BG_DARK    = "#0a0e0a"
@@ -96,17 +97,21 @@ class RadiowaveApp:
         root.minsize(700, 480)
 
         # Fonts
-        self.font_title   = tkfont.Font(family="Courier", size=15, weight="bold")
-        self.font_sub     = tkfont.Font(family="Courier", size=8)
-        self.font_label   = tkfont.Font(family="Courier", size=10, weight="bold")
-        self.font_value   = tkfont.Font(family="Courier", size=10)
-        self.font_btn     = tkfont.Font(family="Courier", size=11, weight="bold")
-        self.font_btnsub  = tkfont.Font(family="Courier", size=8)
-        self.font_stat    = tkfont.Font(family="Courier", size=18, weight="bold")
-        self.font_statlbl = tkfont.Font(family="Courier", size=8)
-        self.font_status  = tkfont.Font(family="Courier", size=9)
+        self.font_title      = tkfont.Font(family="Courier", size=15, weight="bold")
+        self.font_sub        = tkfont.Font(family="Courier", size=8)
+        self.font_label      = tkfont.Font(family="Courier", size=10, weight="bold")
+        self.font_value      = tkfont.Font(family="Courier", size=10)
+        self.font_btn        = tkfont.Font(family="Courier", size=11, weight="bold")
+        self.font_btnsub     = tkfont.Font(family="Courier", size=8)
+        self.font_stat       = tkfont.Font(family="Courier", size=18, weight="bold")
+        self.font_statlbl    = tkfont.Font(family="Courier", size=8)
+        self.font_status     = tkfont.Font(family="Courier", size=9)
+        self.font_readme     = tkfont.Font(family="Courier", size=9)
+        self.font_readme_h1  = tkfont.Font(family="Courier", size=13, weight="bold")
+        self.font_readme_h2  = tkfont.Font(family="Courier", size=11, weight="bold")
+        self.font_readme_h3  = tkfont.Font(family="Courier", size=10, weight="bold")
+        self.font_readme_code = tkfont.Font(family="Courier", size=9)
 
-        # Active tool tracking
         self.active_btn = None
 
         self._build_ui()
@@ -118,7 +123,7 @@ class RadiowaveApp:
         title_bar.pack(fill="x")
 
         tk.Label(title_bar,
-                 text="📻  Radiowave Connection  v1.0",
+                 text="📻  Radiowave Connection  v1.1",
                  font=self.font_title,
                  bg=BG_SIDEBAR, fg=FG_GREEN).pack(side="left", padx=16)
 
@@ -127,24 +132,21 @@ class RadiowaveApp:
                  font=self.font_sub,
                  bg=BG_SIDEBAR, fg=FG_DIM).pack(side="right", padx=16)
 
-        # Separator
         tk.Frame(self.root, bg=BORDER, height=1).pack(fill="x")
 
-        # ── Main body (sidebar + content) ───────────────────────
+        # ── Main body ───────────────────────────────────────────
         body = tk.Frame(self.root, bg=BG_DARK)
         body.pack(fill="both", expand=True)
 
         # ── LEFT SIDEBAR ────────────────────────────────────────
-        sidebar = tk.Frame(body, bg=BG_SIDEBAR, width=200)
+        sidebar = tk.Frame(body, bg=BG_SIDEBAR, width=270)
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
 
-        tk.Label(sidebar,
-                 text="— TOOLS —",
+        tk.Label(sidebar, text="— TOOLS —",
                  font=self.font_statlbl,
                  bg=BG_SIDEBAR, fg=FG_DIM).pack(pady=(16, 8))
 
-        # Tool buttons
         self.btn_search = self._make_sidebar_btn(
             sidebar,
             "🔍  Search Transmitters",
@@ -154,20 +156,32 @@ class RadiowaveApp:
 
         self.btn_hamcall = self._make_sidebar_btn(
             sidebar,
-            "📡  HamCall Lookup",
+            "📡  HamCall+ Lookup",
             "Ham & GMRS — hamcall.py",
             self._launch_hamcall
         )
 
-        # Divider
+        # ── INFO section ────────────────────────────────────────
         tk.Frame(sidebar, bg=BORDER, height=1).pack(fill="x", padx=16, pady=12)
 
-        tk.Label(sidebar,
-                 text="— COMING SOON —",
+        tk.Label(sidebar, text="— INFO —",
                  font=self.font_statlbl,
                  bg=BG_SIDEBAR, fg=FG_DIM).pack(pady=(0, 8))
 
-        # Dimmed future buttons
+        self.btn_readme = self._make_sidebar_btn(
+            sidebar,
+            "📖  README / Help",
+            "Docs — open inside app",
+            self._show_readme
+        )
+
+        # ── COMING SOON ─────────────────────────────────────────
+        tk.Frame(sidebar, bg=BORDER, height=1).pack(fill="x", padx=16, pady=12)
+
+        tk.Label(sidebar, text="— COMING SOON —",
+                 font=self.font_statlbl,
+                 bg=BG_SIDEBAR, fg=FG_DIM).pack(pady=(0, 8))
+
         self._make_sidebar_btn_dim(sidebar, "🔄  Update Databases",  "Download + import")
         self._make_sidebar_btn_dim(sidebar, "🔧  Toolbox",           "Ham radio utilities")
         self._make_sidebar_btn_dim(sidebar, "📋  Reports",           "Saved search results")
@@ -185,14 +199,12 @@ class RadiowaveApp:
         )
         self.lbl_db_status.pack(pady=(4, 12))
 
-        # Sidebar right border
         tk.Frame(body, bg=BORDER, width=1).pack(side="left", fill="y")
 
         # ── RIGHT CONTENT PANEL ─────────────────────────────────
         self.content = tk.Frame(body, bg=BG_DARK)
         self.content.pack(side="left", fill="both", expand=True)
 
-        # Show dashboard by default
         self._show_dashboard()
 
         # ── STATUS BAR ──────────────────────────────────────────
@@ -233,7 +245,6 @@ class RadiowaveApp:
                  bg=BTN_ACTIVE, fg=FG_DIM,
                  anchor="w", padx=10, pady=2).pack(fill="x")
 
-        # Bind click to all children
         for widget in [frame, inner] + inner.winfo_children():
             widget.bind("<Button-1>", lambda e, cmd=command, f=inner: self._btn_click(cmd, f))
             widget.bind("<Enter>",    lambda e, f=inner: f.config(bg=HIGHLIGHT))
@@ -274,7 +285,6 @@ class RadiowaveApp:
     def _show_dashboard(self):
         self._clear_content()
 
-        # Welcome header
         hdr = tk.Frame(self.content, bg=BG_DARK, pady=20)
         hdr.pack(fill="x", padx=24)
 
@@ -288,15 +298,12 @@ class RadiowaveApp:
                  font=self.font_sub,
                  bg=BG_DARK, fg=FG_DIM).pack(anchor="w", pady=(4, 0))
 
-        # Separator
         tk.Frame(self.content, bg=BORDER, height=1).pack(fill="x", padx=24)
 
-        # Stats grid
         stats_frame = tk.Frame(self.content, bg=BG_DARK, pady=20)
         stats_frame.pack(fill="x", padx=24)
 
-        tk.Label(stats_frame,
-                 text="— DATABASE STATS —",
+        tk.Label(stats_frame, text="— DATABASE STATS —",
                  font=self.font_statlbl,
                  bg=BG_DARK, fg=FG_DIM).pack(anchor="w", pady=(0, 12))
 
@@ -306,10 +313,10 @@ class RadiowaveApp:
         self.stat_labels = {}
 
         stat_defs = [
-            ("licenses",     "Active Licenses",  "Part 90"),
-            ("transmitters", "Transmitter Sites", "with GPS"),
-            ("amateur",      "Ham Callsigns",     "amateur"),
-            ("gmrs",         "GMRS Licenses",     "family radio"),
+            ("licenses",     "Active Licenses",   "Part 90"),
+            ("transmitters", "Transmitter Sites",  "with GPS"),
+            ("amateur",      "Ham Callsigns",      "amateur"),
+            ("gmrs",         "GMRS Licenses",      "family radio"),
         ]
 
         for i, (key, label, sublabel) in enumerate(stat_defs):
@@ -334,22 +341,18 @@ class RadiowaveApp:
                      font=self.font_statlbl,
                      bg=BG_PANEL, fg=FG_DIM).pack()
 
-        # Separator
         tk.Frame(self.content, bg=BORDER, height=1).pack(fill="x", padx=24, pady=(8, 0))
 
-        # Tool cards
         tools_frame = tk.Frame(self.content, bg=BG_DARK, pady=16)
         tools_frame.pack(fill="x", padx=24)
 
-        tk.Label(tools_frame,
-                 text="— QUICK LAUNCH —",
+        tk.Label(tools_frame, text="— QUICK LAUNCH —",
                  font=self.font_statlbl,
                  bg=BG_DARK, fg=FG_DIM).pack(anchor="w", pady=(0, 12))
 
         launch_row = tk.Frame(tools_frame, bg=BG_DARK)
         launch_row.pack(fill="x")
 
-        # Search launch card
         self._make_launch_card(
             launch_row,
             "🔍  Search Transmitters",
@@ -359,22 +362,23 @@ class RadiowaveApp:
             FG_GREEN
         )
 
-        # HamCall launch card
         self._make_launch_card(
             launch_row,
-            "📡  HamCall Lookup",
+            "📡  HamCall+ Lookup",
             "Look up any ham or GMRS callsign\ninstantly from 3.9M+ offline records",
-            "Open HamCall",
+            "Open HamCall+",
             self._launch_hamcall,
             FG_AMBER
         )
 
-        # Footer note
-        tk.Frame(self.content, bg=BORDER, height=1).pack(fill="x", padx=24, pady=(8,0))
+        tk.Frame(self.content, bg=BORDER, height=1).pack(fill="x", padx=24, pady=(8, 0))
         tk.Label(self.content,
                  text='"I Will Find You"  📻  — Minty & The Wizard 🧙',
                  font=self.font_statlbl,
                  bg=BG_DARK, fg=FG_DIM).pack(pady=8)
+
+        # Reload stats every time dashboard is shown
+        self._load_stats()
 
     def _make_launch_card(self, parent, title, desc, btn_text, command, btn_color):
         """Create a quick launch card in the dashboard."""
@@ -407,6 +411,154 @@ class RadiowaveApp:
         btn.bind("<Enter>", lambda e: btn.config(bg=HIGHLIGHT))
         btn.bind("<Leave>", lambda e: btn.config(bg=BTN_ACTIVE))
 
+    # ── README VIEWER ───────────────────────────────────────────
+    def _show_readme(self):
+        """Display README.md inside the content panel."""
+        self._clear_content()
+        self._set_status("📖  README / Help", FG_GREEN)
+
+        # Header row
+        hdr = tk.Frame(self.content, bg=BG_DARK, pady=12)
+        hdr.pack(fill="x", padx=24)
+
+        tk.Label(hdr, text="📖  README / Help",
+                 font=self.font_btn,
+                 bg=BG_DARK, fg=FG_GREEN).pack(side="left")
+
+        back_btn = tk.Button(hdr,
+                             text="⌂  Dashboard",
+                             font=self.font_statlbl,
+                             bg=BTN_ACTIVE, fg=FG_DIM,
+                             activebackground=HIGHLIGHT,
+                             activeforeground=FG_GREEN,
+                             relief="flat", bd=0,
+                             padx=10, pady=4,
+                             cursor="hand2",
+                             command=self._show_dashboard)
+        back_btn.pack(side="right")
+        back_btn.bind("<Enter>", lambda e: back_btn.config(bg=HIGHLIGHT, fg=FG_GREEN))
+        back_btn.bind("<Leave>", lambda e: back_btn.config(bg=BTN_ACTIVE, fg=FG_DIM))
+
+        tk.Frame(self.content, bg=BORDER, height=1).pack(fill="x", padx=24)
+
+        # Scrollable text area
+        text_frame = tk.Frame(self.content, bg=BG_DARK)
+        text_frame.pack(fill="both", expand=True, padx=16, pady=8)
+
+        scrollbar = tk.Scrollbar(text_frame, bg=BG_SIDEBAR,
+                                 troughcolor=BG_DARK,
+                                 activebackground=FG_DIM)
+        scrollbar.pack(side="right", fill="y")
+
+        self.readme_text = tk.Text(
+            text_frame,
+            bg=BG_PANEL,
+            fg=FG_WHITE,
+            font=self.font_readme,
+            relief="flat",
+            bd=0,
+            wrap="word",
+            cursor="arrow",
+            state="disabled",
+            yscrollcommand=scrollbar.set,
+            padx=16,
+            pady=12,
+            spacing1=2,
+            spacing2=2,
+            spacing3=4,
+        )
+        self.readme_text.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=self.readme_text.yview)
+
+        # Text tags for markdown styling
+        self.readme_text.tag_configure("h1",
+            font=self.font_readme_h1, foreground=FG_GREEN,
+            spacing1=10, spacing3=4)
+        self.readme_text.tag_configure("h2",
+            font=self.font_readme_h2, foreground=FG_GREEN,
+            spacing1=8, spacing3=2)
+        self.readme_text.tag_configure("h3",
+            font=self.font_readme_h3, foreground=FG_AMBER,
+            spacing1=6, spacing3=2)
+        self.readme_text.tag_configure("codeline",
+            font=self.font_readme_code, foreground=FG_AMBER,
+            background=BG_DARK, lmargin1=16, lmargin2=16)
+        self.readme_text.tag_configure("bullet",
+            foreground=FG_WHITE, lmargin1=16, lmargin2=24)
+        self.readme_text.tag_configure("separator",
+            foreground=FG_DIM)
+        self.readme_text.tag_configure("dim",
+            foreground=FG_DIM)
+        self.readme_text.tag_configure("normal",
+            foreground=FG_WHITE)
+
+        self._render_readme()
+
+    def _render_readme(self):
+        """Load README.md and render with basic markdown styling."""
+        self.readme_text.config(state="normal")
+        self.readme_text.delete("1.0", tk.END)
+
+        if not os.path.exists(README_PATH):
+            self.readme_text.insert(tk.END, "README.md not found!\n\n", "h2")
+            self.readme_text.insert(tk.END,
+                f"Expected location:\n  {README_PATH}\n\n", "normal")
+            self.readme_text.insert(tk.END,
+                "Make sure README.md is in your ~/fcc-scanner/ folder.", "dim")
+            self.readme_text.config(state="disabled")
+            return
+
+        try:
+            with open(README_PATH, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+        except Exception as e:
+            self.readme_text.insert(tk.END, f"Error reading README: {e}", "dim")
+            self.readme_text.config(state="disabled")
+            return
+
+        in_code_block = False
+
+        for line in lines:
+            stripped = line.rstrip("\n")
+
+            # Code block toggle
+            if stripped.startswith("```"):
+                in_code_block = not in_code_block
+                self.readme_text.insert(tk.END, "\n", "normal")
+                continue
+
+            if in_code_block:
+                self.readme_text.insert(tk.END, stripped + "\n", "codeline")
+                continue
+
+            # Headings
+            if stripped.startswith("### "):
+                self.readme_text.insert(tk.END, stripped[4:] + "\n", "h3")
+            elif stripped.startswith("## "):
+                self.readme_text.insert(tk.END, stripped[3:] + "\n", "h2")
+            elif stripped.startswith("# "):
+                self.readme_text.insert(tk.END, stripped[2:] + "\n", "h1")
+            # Horizontal rule
+            elif stripped.startswith("---"):
+                self.readme_text.insert(tk.END, "─" * 60 + "\n", "separator")
+            # Bullet points
+            elif stripped.startswith("- ") or stripped.startswith("* "):
+                self.readme_text.insert(tk.END,
+                    "  •  " + stripped[2:] + "\n", "bullet")
+            # Numbered list
+            elif len(stripped) > 2 and stripped[0].isdigit() and stripped[1] in ".)":
+                self.readme_text.insert(tk.END, "  " + stripped + "\n", "bullet")
+            # Empty line
+            elif stripped == "":
+                self.readme_text.insert(tk.END, "\n", "normal")
+            # Normal text
+            else:
+                self.readme_text.insert(tk.END, stripped + "\n", "normal")
+
+        self.readme_text.config(state="disabled")
+        self.readme_text.yview_moveto(0)
+        self._set_status("📖  README loaded — scroll to read  |  click ⌂ Dashboard to go back", FG_GREEN)
+
     # ── TOOL LAUNCHERS ──────────────────────────────────────────
     def _launch_search(self):
         """Launch search_fcc.py in a new terminal window."""
@@ -417,7 +569,6 @@ class RadiowaveApp:
 
         self._set_status("Launching Search Transmitters terminal...", FG_GREEN)
 
-        # Try common Linux terminal emulators in order
         terminals = [
             ["x-terminal-emulator", "-e", f"bash -c 'cd {BASE_DIR} && python3 search_fcc.py; exec bash'"],
             ["xterm", "-e", f"bash -c 'cd {BASE_DIR} && python3 search_fcc.py; exec bash'"],
@@ -447,23 +598,21 @@ class RadiowaveApp:
             self._set_status(f"⚠  hamcall.py not found at {BASE_DIR}", FG_RED)
             return
 
-        self._set_status("Launching HamCall...", FG_AMBER)
+        self._set_status("Launching HamCall+...", FG_AMBER)
         try:
             subprocess.Popen([sys.executable, script])
-            self._set_status("✓  HamCall launched — check your taskbar!", FG_GREEN)
+            self._set_status("✓  HamCall+ launched — check your taskbar!", FG_GREEN)
         except Exception as e:
-            self._set_status(f"⚠  Could not launch HamCall: {e}", FG_RED)
+            self._set_status(f"⚠  Could not launch HamCall+: {e}", FG_RED)
 
     # ── HELPERS ─────────────────────────────────────────────────
     def _load_stats(self):
         """Load DB stats and update dashboard."""
         stats = get_db_stats()
 
-        # Update stat cards if they exist
         for key, lbl in getattr(self, "stat_labels", {}).items():
             lbl.config(text=stats.get(key, "—"))
 
-        # Update sidebar DB status
         self.lbl_db_status.config(
             text=stats["status"],
             fg=stats["status_color"]
@@ -476,6 +625,8 @@ class RadiowaveApp:
 
     def _set_status(self, msg, color=None):
         """Update the bottom status bar."""
+        if not hasattr(self, "status_msg"):
+            return
         self.status_msg.config(
             text=msg,
             fg=color if color else FG_DIM
