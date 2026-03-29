@@ -33,7 +33,7 @@ fcc_reference.db  ←  PERMANENT REFERENCE (never rebuilt)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 TOOLS THAT ACCESS THE JAILHOUSE:
-  radiowave.py   ← THE FRONT DOOR — Radiowave Connection v1.0 launcher
+  radiowave.py   ← THE FRONT DOOR — Radiowave Connection v1.1 launcher
   search_fcc.py  ← Part 90 scanner radio search tool
   hamcall.py     ← Amateur & GMRS callsign GUI lookup
   (more tools coming as the project grows!!)
@@ -53,7 +53,7 @@ TOOLS THAT ACCESS THE JAILHOUSE:
 ├── build_reference.py  ← Step 5: Build permanent reference database (run once)
 ├── import_amateur.py   ← Step 6: Import amateur radio callsign database
 ├── import_gmrs.py      ← Step 7: Import gmrs radio callsign database
-├── radiowave.py        ← THE FRONT DOOR — Radiowave Connection v1.0 launcher!!
+├── radiowave.py        ← THE FRONT DOOR — Radiowave Connection v1.1 launcher!!
 ├── search_fcc.py       ← Part 90 search tool (terminal)
 ├── hamcall.py          ← Ham & GMRS callsign lookup (GUI desktop app!!)
 ├── uscities.csv        ← US cities database (31,257 cities with GPS coords)
