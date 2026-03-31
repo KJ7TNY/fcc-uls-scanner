@@ -1066,67 +1066,6 @@ def search_reference(con):
         print("  ⚠  Invalid choice.")
 
 def search_by_frn(con):
-    print("\n--- FRN Search ---")
-    print("  FRN ties ALL licenses for one entity together — across all call signs!")
-    print("  Find the FRN in any search result, then use it here.\n")
-
-    frn = input("  Enter FRN (e.g. 0006610380): ").strip()
-
-    # First show a summary of all call signs under this FRN
-    callsigns = con.execute("""
-        SELECT DISTINCT hd.call_sign
-        FROM hd
-        WHERE hd.unique_system_id IN (
-            SELECT unique_system_id FROM en
-            WHERE frn = ?
-               OR CAST(frn AS INTEGER) = CAST(? AS INTEGER)
-        )
-        AND hd.call_sign IS NOT NULL AND hd.call_sign != ''
-        ORDER BY hd.call_sign
-    """, (frn, frn)).fetchall()
-
-    # Get entity name
-    entity = con.execute("""
-        SELECT DISTINCT entity_name FROM en
-        WHERE (frn = ? OR CAST(frn AS INTEGER) = CAST(? AS INTEGER))
-          AND entity_type = 'L'
-          AND entity_name IS NOT NULL
-        LIMIT 1
-    """, (frn, frn)).fetchone()
-
-    entity_name = entity[0] if entity else "Unknown"
-    cs_list = [r[0] for r in callsigns if r[0]]
-
-    print(f"\n{'='*70}")
-    print(f"  FRN: {frn}")
-    print(f"  Entity: {entity_name}")
-    if cs_list:
-        print(f"  Call Signs ({len(cs_list)}): {'  '.join(cs_list)}")
-    print(f"{'='*70}")
-
-    # Get all transmitter sites — include ones without coords too
-    rows = con.execute(
-        base_query() + """
-        WHERE lo.unique_system_id IN (
-            SELECT unique_system_id FROM en
-            WHERE frn = ?
-               OR CAST(frn AS INTEGER) = CAST(? AS INTEGER)
-        )
-        GROUP BY lo.unique_system_id, lo.location_number
-        ORDER BY lo.location_state, lo.location_city
-        """,
-        (frn, frn)
-    ).fetchall()
-
-    print_results(con, rows, f"All transmitter sites for FRN {frn} — {entity_name}")
-
-    if rows:
-        save = input("\n  Save to file? (y/n): ").strip().lower()
-        if save == 'y':
-            save_results(con, rows, f"results_frn_{frn}.txt")
-
-
-def search_by_frn(con):
     print("\n--- FRN Search — Full Cross-Service Lookup ---")
     print("  FRN ties ALL licenses for one entity together!")
     print("  Searches Part 90, Amateur, and GMRS in one shot!!\n")
@@ -1273,11 +1212,71 @@ def search_by_frn(con):
     else:
         print(f"\n  No GMRS licenses found for this FRN.")
 
-    # ── Save option ────────────────────────────────────────────────────────────
-    if rows:
-        save = input("\n  Save Part 90 results to file? (y/n): ").strip().lower()
-        if save == 'y':
-            save_results(con, rows, f"results_frn_{frn}.txt")
+    # ── Save option — always offered regardless of which service had results ──
+    save = input("\n  Save results to file? (y/n): ").strip().lower()
+    if save == 'y':
+        from datetime import datetime
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        reports_dir = os.path.expanduser("~/fcc-scanner/reports")
+        os.makedirs(reports_dir, exist_ok=True)
+        outpath = os.path.join(reports_dir, f"results_frn_{frn}_{ts}.txt")
+        with open(outpath, "w") as f_out:
+            f_out.write(f"FCC FRN Cross-Service Lookup\n")
+            f_out.write(f"{'='*62}\n")
+            f_out.write(f"FRN      : {frn}\n")
+            f_out.write(f"Entity   : {entity_name}\n\n")
+            # Part 90
+            f_out.write(f"PART 90 — TRANSMITTER SITES\n")
+            f_out.write(f"{'─'*62}\n")
+            if rows:
+                for r in rows:
+                    freq_rows = get_frequencies(con, r['unique_system_id'], r['location_number'])
+                    f_out.write(f"Call Sign : {r['call_sign'] or 'N/A'}\n")
+                    f_out.write(f"Licensee  : {r['entity_name'] or 'N/A'}\n")
+                    city = r['location_city'] or ''
+                    state = r['location_state'] or ''
+                    if city or state:
+                        f_out.write(f"Location  : {city}{', ' + state if state else ''}\n")
+                    if r['latitude'] and r['longitude']:
+                        f_out.write(f"Coords    : {r['latitude']:.6f}, {r['longitude']:.6f}\n")
+                    f_out.write(f"{'─'*62}\n")
+                    for line in format_freq_lines(freq_rows, con):
+                        f_out.write(line + "\n")
+                    f_out.write("\n")
+            else:
+                f_out.write("  No Part 90 transmitter sites found.\n\n")
+            # Amateur
+            f_out.write(f"AMATEUR RADIO LICENSES\n")
+            f_out.write(f"{'─'*62}\n")
+            if ham_rows:
+                status_map = {"HA":"Active","HV":"Active (Vanity)","HX":"Expired","HB":"Cancelled","A":"Active","L":"Active"}
+                class_map = {"A":"Advanced","B":"Technician Plus","C":"Amateur Extra","D":"Technician","E":"Amateur Extra","G":"General","N":"Novice","T":"Technician","P":"Technician Plus","":"General"}
+                for r in ham_rows:
+                    f_out.write(f"Call Sign : {r[0]}\n")
+                    f_out.write(f"Name      : {r[1] or f'{r[2]} {r[3]}'.strip()}\n")
+                    f_out.write(f"Location  : {r[4]}, {r[5]}  {r[6]}\n")
+                    f_out.write(f"Class     : {class_map.get(r[8], r[7] or 'Unknown')}\n")
+                    f_out.write(f"Expires   : {r[11] or 'N/A'}\n")
+                    f_out.write(f"FRN       : {r[12] or 'N/A'}\n")
+                    f_out.write(f"Status    : {status_map.get(r[13], r[13] or 'Unknown')}\n\n")
+            else:
+                f_out.write("  No amateur licenses found.\n\n")
+            # GMRS
+            f_out.write(f"GMRS LICENSES\n")
+            f_out.write(f"{'─'*62}\n")
+            if gmrs_rows:
+                gmrs_sm = {"A":"Active","E":"Expired","C":"Cancelled","T":"Terminated"}
+                for r in gmrs_rows:
+                    name = r[1] or f"{r[2]} {r[3]}".strip()
+                    f_out.write(f"Call Sign : {r[0]}\n")
+                    f_out.write(f"Name      : {name}\n")
+                    f_out.write(f"Location  : {r[4] or ''}, {r[5] or ''}  {r[6] or ''}\n")
+                    f_out.write(f"Service   : GMRS Family License  462/467 MHz\n")
+                    f_out.write(f"Expires   : {r[9] or 'N/A'}\n")
+                    f_out.write(f"Status    : {gmrs_sm.get(r[8] or '', r[8] or 'Unknown')}\n\n")
+            else:
+                f_out.write("  No GMRS licenses found.\n")
+        print(f"  ✓  Saved to {outpath}")
 
 
 def search_amateur(con):
