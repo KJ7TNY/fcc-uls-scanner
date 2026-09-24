@@ -1,0 +1,18 @@
+# Large database files - rebuild from FCC downloads
+fcc.db
+fcc.db-shm
+fcc.db-wal
+fcc_reference.db-shm
+fcc_reference.db-wal
+
+# FCC source data folders - re-downloaded
+data/
+amateur/
+gmrs/
+
+# Reports folder - local only
+reports/
+
+# Old/backup files
+old/
+
