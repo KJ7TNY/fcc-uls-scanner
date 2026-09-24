@@ -189,7 +189,8 @@ class HamCallApp:
             justify="center"
         )
         self.entry.pack(side="left", ipady=8, padx=(0, 10))
-        self.entry.bind("<Return>", lambda e: self._do_lookup())
+        self.entry.bind("<Return>",   lambda e: self._do_lookup())
+        self.entry.bind("<KP_Enter>", lambda e: self._do_lookup())
         self.entry.bind("<KeyRelease>", self._auto_upper)
         self.entry.focus_set()
 
@@ -289,10 +290,20 @@ class HamCallApp:
                      font=self.font_label,
                      bg=BG_PANEL, fg=FG_DIM).pack(side="left", padx=(0, 8))
 
-            lbl = tk.Label(row, text="—",
+            # Use readonly Entry so text is selectable and copyable!!
+            lbl = tk.Entry(row,
                            font=self.font_value,
-                           bg=BG_PANEL, fg=FG_DIM,
-                           anchor="w")
+                           bg=BG_PANEL,
+                           fg=FG_DIM,
+                           relief="flat",
+                           bd=0,
+                           highlightthickness=0,
+                           highlightbackground=BG_PANEL,
+                           readonlybackground=BG_PANEL,
+                           selectbackground=HIGHLIGHT,
+                           selectforeground=FG_GREEN,
+                           state="readonly",
+                           insertwidth=0)
             lbl.pack(side="left", fill="x", expand=True)
             self.fields[key] = lbl
 
@@ -313,6 +324,16 @@ class HamCallApp:
                  font=self.font_sub,
                  bg=BG_DARK, fg=FG_DIM).pack(side="right")
 
+    def _set_field(self, key, text, color=None):
+        """Set a readonly Entry field value and color."""
+        if color is None:
+            color = FG_DIM
+        lbl = self.fields[key]
+        lbl.config(state="normal")
+        lbl.delete(0, tk.END)
+        lbl.insert(0, text)
+        lbl.config(fg=color, state="readonly")
+
     def _auto_upper(self, event=None):
         """Auto-uppercase the callsign entry."""
         val = self.entry_var.get().upper()
@@ -322,8 +343,8 @@ class HamCallApp:
     def _clear(self):
         self.entry_var.set("")
         self.lbl_callsign.config(text="- - - - -", fg=FG_DIM)
-        for key, lbl in self.fields.items():
-            lbl.config(text="—", fg=FG_DIM)
+        for key in self.fields:
+            self._set_field(key, "—", FG_DIM)
         self.hint.config(
             text="Ham or GMRS — HamCall+ figures it out automatically!!",
             fg=FG_DIM)
@@ -368,8 +389,8 @@ class HamCallApp:
 
         if not row:
             self.lbl_callsign.config(text=callsign, fg=FG_RED)
-            for key, lbl in self.fields.items():
-                lbl.config(text="—", fg=FG_DIM)
+            for key in self.fields:
+                self._set_field(key, "—", FG_DIM)
             self.status_bar.config(
                 text=f"⚠  {callsign} not found — license may be expired or invalid",
                 fg=FG_AMBER)
@@ -379,17 +400,17 @@ class HamCallApp:
         self.lbl_callsign.config(text=row["call_sign"], fg=FG_GREEN)
 
         name = row["full_name"] or f"{row['first_name']} {row['last_name']}".strip()
-        self.fields["name"].config(text=name or "—", fg=FG_WHITE)
+        self._set_field("name", name or "—", FG_WHITE)
 
         city    = row["city"] or ""
         state   = row["state"] or ""
         zipcode = row["zip_code"] or ""
         location = f"{city}, {state}  {zipcode}".strip(", ")
-        self.fields["location"].config(text=location or "—", fg=FG_WHITE)
+        self._set_field("location", location or "—", FG_WHITE)
 
         class_code = row["class_code"] or ""
         class_str  = CLASS_MAP.get(class_code, class_code or "General")
-        self.fields["cls"].config(text=class_str, fg=FG_WHITE)
+        self._set_field("cls", class_str, FG_WHITE)
 
         grant   = row["grant_date"] or ""
         expires = row["expired_date"] or ""
@@ -399,16 +420,16 @@ class HamCallApp:
                 expires = f"{parts[0]}/{parts[1]}/{int(parts[2])+10}"
             except Exception:
                 expires = "—"
-        self.fields["expires"].config(text=expires or "—", fg=FG_WHITE)
+        self._set_field("expires", expires or "—", FG_WHITE)
 
-        self.fields["frn"].config(text=row["frn"] or "—", fg=FG_WHITE)
+        self._set_field("frn", row["frn"] or "—", FG_WHITE)
 
         status_code = row["status"] or ""
         status_text, status_color = STATUS_MAP.get(
             status_code, (status_code or "Unknown", FG_DIM))
-        self.fields["status"].config(text=status_text, fg=status_color)
+        self._set_field("status", status_text, status_color)
 
-        self.fields["note"].config(text="—", fg=FG_DIM)
+        self._set_field("note", "—", FG_DIM)
 
         self.status_bar.config(
             text=f"✓  Found: {row['call_sign']}  —  {name}  —  Amateur",
@@ -425,8 +446,8 @@ class HamCallApp:
 
         if not row:
             self.lbl_callsign.config(text=callsign, fg=FG_RED)
-            for key, lbl in self.fields.items():
-                lbl.config(text="—", fg=FG_DIM)
+            for key in self.fields:
+                self._set_field(key, "—", FG_DIM)
             self.status_bar.config(
                 text=f"⚠  {callsign} not found — check format (e.g. WRJV291)",
                 fg=FG_AMBER)
@@ -440,25 +461,19 @@ class HamCallApp:
         self.lbl_callsign.config(text=row["call_sign"], fg=cs_color)
 
         name = row["full_name"] or f"{row['first_name']} {row['last_name']}".strip()
-        self.fields["name"].config(text=name or "—", fg=FG_WHITE)
+        self._set_field("name", name or "—", FG_WHITE)
 
         city    = row["city"] or ""
         state   = row["state"] or ""
         zipcode = row["zip_code"] or ""
         location = f"{city}, {state}  {zipcode}".strip(", ")
-        self.fields["location"].config(text=location or "—", fg=FG_WHITE)
+        self._set_field("location", location or "—", FG_WHITE)
 
-        self.fields["cls"].config(
-            text="GMRS Family License  462/467 MHz", fg=FG_AMBER)
-
-        self.fields["expires"].config(
-            text=row["expired_date"] or "—", fg=FG_WHITE)
-        self.fields["frn"].config(
-            text=row["frn"] or "—", fg=FG_WHITE)
-        self.fields["status"].config(
-            text=status_text, fg=status_color)
-        self.fields["note"].config(
-            text="Covers entire family — no test required", fg=FG_DIM)
+        self._set_field("cls", "GMRS Family License  462/467 MHz", FG_AMBER)
+        self._set_field("expires", row["expired_date"] or "—", FG_WHITE)
+        self._set_field("frn", row["frn"] or "—", FG_WHITE)
+        self._set_field("status", status_text, status_color)
+        self._set_field("note", "Covers entire family — no test required", FG_DIM)
 
         self.status_bar.config(
             text=f"✓  Found: {row['call_sign']}  —  {name}  —  GMRS",
